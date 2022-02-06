@@ -1,0 +1,14 @@
+{
+    "devMode": true,
+    "keep_topmost": false,
+    "borderless": true,
+    "fullscreen": false,
+    "terrain_y_scale": 240,
+    "fairy_max_height": 80.0,
+    "use_perlin": false,
+    "num_generators": 4,
+    "render_distance": 8,
+    "map_scale": 300,
+    "chunk_divisions": 10,
+    "terrain_x_z_scale": 0.4
+}
