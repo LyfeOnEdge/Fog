@@ -1,8 +1,22 @@
 import os, sys, json
 from types import SimpleNamespace
 
-TERRAIN_Y_SCALE = 240
+TERRAIN_Y_SCALE = 200
 def remake_settings():
+	# setting_dict = {
+	# 	"devMode" : True,
+	# 	"keep_topmost" : False,
+	# 	"borderless" : True,
+	# 	"fullscreen" : False,
+	# 	"terrain_y_scale" : TERRAIN_Y_SCALE,
+	# 	"fairy_max_height" : TERRAIN_Y_SCALE/3,
+	# 	"use_perlin" : False,
+	# 	"num_generators": 4,
+	# 	"render_distance":8,
+	# 	"map_scale": 300,
+	# 	"chunk_divisions":7,
+	# 	"terrain_x_z_scale":0.4,
+	# }
 	setting_dict = {
 		"devMode" : True,
 		"keep_topmost" : False,
@@ -11,11 +25,18 @@ def remake_settings():
 		"terrain_y_scale" : TERRAIN_Y_SCALE,
 		"fairy_max_height" : TERRAIN_Y_SCALE/3,
 		"use_perlin" : False,
-		"num_generators": 4,
-		"render_distance":8,
-		"map_scale": 300,
-		"chunk_divisions":10,
-		"terrain_x_z_scale":0.4,
+		"render_distance":3,
+		"map_scale": 3000,
+		"second_generator_scale": 4, #Fine details
+		"second_generator_weight" : 0.3, #Fine details
+		"third_generator_scale": 0.05, #Big details
+		"third_generator_weight" : 8, #Big details
+		"fourth_generator_scale": 0.3, #Big details
+		"fourth_generator_weight" : 5, #Big details
+		"chunk_divisions":20,
+		"terrain_x_z_scale":3.2,
+		"player_speed" : 210,
+		"player_height" : 35,
 	}
 	with open("settings.json", "w+") as s:
 		json.dump(setting_dict, s, indent=4)

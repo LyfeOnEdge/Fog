@@ -2,6 +2,8 @@ from ursina import *
 from .settings import settings
 # from .lighting import LitObject, LitPointLight
 import numpy as np
+from .inventory import LaserWand, ZapWand, ImpWand
+from .chunk_shader import chunk_shader
 
 FAIRY_MAX_VELOCITY = 25
 FAIRY_THRUST = 2.2
@@ -19,15 +21,16 @@ FIRING_1 = 1
 FIRING_2 = 2
 FIRING_3 = 3
 # FIRING_4 = 6
-
+ 
 KEY_DROP_CHANCE = 1
 STATE_CHANGE_DELAY = 1
+
+
+
 
 class EntityManager:
 	def __init__(self, game):
 		self.game = game
-		self.tree_models = {}
-		self.mushroom_models = {}
 		self.shootables_parent = Entity(name="shootablesparent")
 		mouse.traverse_target = self.shootables_parent
 
@@ -37,12 +40,11 @@ class EntityManager:
 			"wand_bolt" : load_model("assets/models/wand_bolt"),
 			"wand_bolt_default" : load_model("assets/models/wand_bolt_default"),
 			"wand_orb" : load_model("assets/models/wand_orb"),
+			"chest": load_model("assets/models/chest_large"),
+			"crate": load_model("assets/models/crate"),
+			"crate_collider": load_model("assets/models/crate_collider")
 		}
 
-		for i in range(31):
-			self.tree_models[i] = load_model(f"assets/models/tree{i}")
-		for i in range(5):
-			self.mushroom_models[i] = load_model(f"assets/models/smallmushroom{i}")
 		self.tiki_models = {
 			NORMAL : load_model("assets/models/tiki_angry"),
 			FIRING_1 : load_model("assets/models/tiki_firing_1"),
@@ -50,10 +52,13 @@ class EntityManager:
 			FIRING_3 : load_model("assets/models/tiki_firing_3"),
 		}
 		self.active_entities = []
-		self.fairies = []
-		self.enemies = []
-		self.pickups = []
-		self.projectiles = []
+		self.fairies,self.enemies,self.pickups,self.projectiles,self.chests=[],[],[],[],[]
+
+		points = np.array([Vec3(random.uniform(-10,10),random.uniform(-5,0),random.uniform(-10,10)) for i in range(160)])
+		self.snow=Mesh(vertices=points, mode='point', thickness=8, render_points_in_3d=True)
+
+	def get_snow_model(self):
+		return deepcopy(self.snow)
 
 	def spawn_tree(self, position, rotation, *args, **kwargs):
 		return Tree(self.game, position, rotation, self.get_tree(), *args, **kwargs)
@@ -65,7 +70,10 @@ class EntityManager:
 		else:
 			ent = self.spawn_entity(PlayerFireBall, position, target, *args, texture="assets/textures/clouds.png", parent=self.shootables_parent, **kwargs)
 		return ent
-	
+	def spawn_chest(self, position, *args, **kwargs):
+		ent = self.spawn_entity(Chest, position, *args, parent=self.shootables_parent, **kwargs)
+		self.chests.append(ent)
+		return ent
 	def spawn_tiki(self, position, *args, **kwargs):
 		ent = self.spawn_entity(Tiki, position, *args, parent=self.shootables_parent, **kwargs)
 		ent.action_models = self.tiki_models
@@ -88,10 +96,6 @@ class EntityManager:
 	def spawn_entity(self, clas, position, *args, **kwargs):
 		ent = clas(self.game, *args, position=position, **kwargs)
 		return ent
-	def get_tree(self):
-		return deepcopy(self.tree_models[random.choice(list(self.tree_models.keys()))])
-	def get_mushroom(self):
-		return deepcopy(self.mushroom_models[random.choice(list(self.mushroom_models.keys()))])
 
 	def destroy(self, target, unload=False):
 		lists = [self.active_entities, self.fairies, self.enemies, self.pickups, self.projectiles]
@@ -111,20 +115,6 @@ class EntityManager:
 	def get_model(self, model_name):
 		return deepcopy(self.model_dict.get(model_name))
 
-def get_tree(): return f"assets/models/tree{random.randint(0,11)}"
-def get_mushroom(): return f"assets/models/smallmushroom{random.randint(0,4)}"
-
-class SourcePortal(Entity):
-	def __init__(self, dest_portal, **kwargs):
-		self.dest_portal = dest_portal
-		Entity.__init__(self, model='cube', scale=Vec3(200,600,10), origin_y=-0.5, **kwargs)
-		marker = Entity(model='sphere', scale = 8, position = self.position,y=self.height, color = color.black)
-
-class DestPortal(Entity):
-	def __init__(self, position, **kwargs):
-		Entity.__init__(self, model='cube', scale=Vec3(200,600,10), origin_y=-0.5, visible=False, **kwargs)
-		marker = Entity(model='sphere', scale = 8, position = self.position,y=self.height, color = color.black)
-
 class BaseShootable(Entity):
 	def __init__(self, game, *args, max_hp = 100, **kwargs):
 		Entity.__init__(self,*args,**kwargs)
@@ -137,7 +127,7 @@ class BaseShootable(Entity):
 		self.state = 0
 		self.velocity = Vec3(0,0,0)
 		self.origin_y = -0.5
-		self.scale = 3.5
+		self.scale = 1
 		self.health_bar.enabled = False
 	
 	@property
@@ -157,8 +147,6 @@ class BaseShootable(Entity):
 	def destroy(self): #Overwrite this
 		destroy(self)
 
-
-
 class Tiki(BaseShootable):
 	def __init__(self, game, *args, **kwargs):
 		BaseShootable.__init__(
@@ -169,7 +157,6 @@ class Tiki(BaseShootable):
 			texture="assets/textures/tiki_texture.png",
 			double_sided=False,
 			color=color.rgba(120,100,100,50),
-			scale = 4,
 			max_hp = 40,
 			**kwargs,
 		)
@@ -177,10 +164,10 @@ class Tiki(BaseShootable):
 		self.collider = Cylinder(height=2.5)
 		self.next_state_change = time.time()
 		self.t = 0
-		self.scale *= 5
+		self.scale *= 2
 
 	def update(self):
-		self.t += time.dt + random.uniform(0.0001,0.0003) #Random helps the tikis not move in lockstep
+		self.t += (time.dt + time.dt*random.uniform(0.0001,0.001))/3 #Random helps the tikis not move in lockstep
 		# super().update()
 
 		self.look_at(self.game.player)
@@ -192,12 +179,11 @@ class Tiki(BaseShootable):
 				if self.state > FIRING_3:
 					self.state = FIRING_1
 				self.model = deepcopy(self.action_models[self.state])
-				# self.collider = Cylinder(height=5)
 				self.next_state_change = time.time() + STATE_CHANGE_DELAY + random.uniform(0,2.5)
 		if dis_to_player > TIKI_NOTICE_RANGE:
 			self.state = FIRING_1
 		elif dis_to_player > TIKI_MIN_RANGE:
-			self.position += 6*time.dt*Vec3(self.forward.x,0.5*self.forward.y,self.forward.z)
+			self.position += 8*time.dt*Vec3(self.forward.x,0.5*self.forward.y,self.forward.z)
 
 		self.velocity = self.velocity * 0.996
 		self.velocity.y += math.sin(self.t*4)/200
@@ -225,8 +211,6 @@ class Tiki(BaseShootable):
 		pos = min(max(self.position.y, terrain_height), terrain_height+FAIRY_MAX_HEIGHT)
 
 		self.position.y = pos
-
-
 
 	def attack(self):
 		self.game.entity_manager.spawn_fireball(self.position,self.game.player.position+(0,0.5*self.game.player.height,0))
@@ -261,28 +245,20 @@ class Fairy(BaseShootable):
 			texture="assets/textures/clouds2.png",
 			double_sided=True,
 			color=color.rgba(255,255,255,200),
-			# ambientStrength=0.1,
-			# smoothness = 120,
-			# cubemapIntensity=0,
 		)
 		
 		self.center_sphere = Entity(
 			model=deepcopy(load_model("assets/models/gem")),
 			double_sided=True,
 			color=color.rgba(200,0,0,60),
-			# ambientStrength=0.1,
-			# smoothness = 120,
-			# cubemapIntensity=0,
 		)
-		
-		# self.light = self.game.entity_manager.assign_light(self, 2, 4.5, (200,200,200))
 
 		self.velocity = Vec3(0,0,0)
 		self.origin_y = -0.5
-		self.scale = 3.5 * 6
+		self.scale = 3.5
 		self.inner_sphere.origin_y = -0.5
-		self.inner_sphere.scale = 3 * 6
-		self.center_sphere.scale = 3 * 6
+		self.inner_sphere.scale = 3
+		self.center_sphere.scale = 3
 		self.t = 0
 
 
@@ -322,14 +298,10 @@ class Fairy(BaseShootable):
 		self.center_sphere.rotation_y = -720*self.t
 
 	def destroy(self):
-		# self.game.entity_manager.unassign_light(self.light)
 		destroy(self.inner_sphere)
 		destroy(self.center_sphere)
 		destroy(self)
 		
-		
-		
-
 class BaseLitEntity(Entity):
 	def __init__(self, game, position, rotation, model, *args, color=color.rgb(180,150,120), texture='assets/textures/tree_texture.png', **kwargs):
 		self.game = game
@@ -342,12 +314,8 @@ class BaseLitEntity(Entity):
 			scale_y=1,
 			texture=texture,
 			color=color,
-			# ambientStrength=0.001,
-			# smoothness = 255,
-			# cubemapIntensity=0.001,
 			**kwargs
 		)
-		self.scale *= 5
 
 class BaseTerrainElement(Entity):
 	def __init__(self, game, *args, **kwargs):
@@ -359,6 +327,13 @@ class Tree(BaseTerrainElement):
 		kwargs['model'] = game.entity_manager.get_tree()
 		kwargs['color'] = color.rgb(180,150,120)
 		BaseTerrainElement.__init__(self, game, *args, **kwargs)
+
+class BigTree(BaseTerrainElement):
+	def __init__(self, game, *args, **kwargs):
+		kwargs['model'] = game.entity_manager.get_big_tree()
+		kwargs['color'] = color.rgb(180,150,120)
+		BaseTerrainElement.__init__(self, game, *args, **kwargs)
+		self.scale *= 2
 
 class Mushroom(BaseTerrainElement):
 	def __init__(self, game, *args, **kwargs):
@@ -399,9 +374,7 @@ class Chunk(Entity):
 				self,
 				model=HeightMesh(heightmap),
 				texture="assets/textures/grass.png",
-				# ambientStrength=0.01,
-				# smoothness = 255,
-				# cubemapIntensity=0.001,
+				shader=chunk_shader,
 				color=color.rgb(80,100,100),
 				**kwargs,
 			)
@@ -410,16 +383,17 @@ class Chunk(Entity):
 		if self.collider: del self.collider
 		self.collider = None
 		self.chunk_entities = []
-	def save(self):
-		#You could implement a more complicated save system here,
-		#adding more to the chunk save than just the heightmap
-		#You would also need to add something during the chunk init that
-		#checked if a save file existed for it and if so loaded that
-		#save data
-		x,z = self.chunk_id
-		filename = self.game.saves_dir+f"{x}x{z}#{self.game.seed}.json"
-		with open(filename, "w+") as f:
-			json.dump({"heightmap":self.heightmap}, f)
+		self.foliage_tokens = []
+		lhm = len(self.heightmap)
+		self.set_shader_input('mapdata', self.heightmap.copy().reshape(lhm*lhm).tolist())
+		self.set_shader_input('base_position', self.position)
+	# def save(self):
+	# 	x,z = self.chunk_id
+	# 	filename = self.game.saves_dir+f"{x}x{z}#{self.game.seed}.json"
+	# 	with open(filename, "w+") as f:
+	# 		json.dump({"heightmap":self.heightmap}, f)
+	def update(self):
+		self.set_shader_input('player_position', self.game.player.position)
 
 
 
@@ -452,7 +426,7 @@ class HealthPickup(Entity):
 			destroy(self)
 			return
 
-		self.dt += time.dt + random.uniform(0.00,0.04)
+		self.dt += time.dt
 
 		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale+5
 		if self.position[1] > terrain_height:
@@ -475,7 +449,7 @@ class KeyPickup(Entity):
 			double_sided=True,
 			color=color.rgba(255,255,255,255),
 			collider = 'box',
-			scale=10,
+			scale=2,
 			**kwargs
 		)
 		self.dt = 0
@@ -510,7 +484,7 @@ class FireBall(Entity):
 			model='assets/models/invert_orb',
 			double_sided=True,
 			color=color.rgba(255,0,0,180),
-			scale=2,
+			scale=0.25,
 			**kwargs
 		)
 		self.scale *= 10
@@ -553,7 +527,7 @@ class PlayerFireBall(Entity):
 			model='sphere',
 			double_sided=True,
 			color=color.rgba(40,40,150,255),
-			scale=2,
+			scale=0.25,
 			**kwargs
 		)
 		self.collider = 'sphere'
@@ -595,4 +569,45 @@ class PlayerFireBall(Entity):
 
 	def destroy(self):
 		# self.game.entity_manager.unassign_light(self.light)
+		destroy(self)
+
+
+
+
+
+
+# class Chest(Entity):
+# 	def __init__(self, game, items=None, *args, **kwargs):
+# 		mesh = Cube()
+# 		Entity.__init__(self,*args,model=deepcopy(mesh),**kwargs)
+# 		self.collider = deepcopy(mesh)
+# 		self.game = game
+# 		self.items = items or [LaserWand, ZapWand, ImpWand]
+# 		# self.scale *= 5
+
+# 	def destroy(self): #Overwrite this
+# 		destroy(self)
+
+
+
+class Chest(Entity):
+	def __init__(self, game, items=None, *args, **kwargs):
+		self.game = game
+		Entity.__init__(
+			self,
+			*args,
+			model=game.entity_manager.get_model('crate'),
+			parent=game.entity_manager.shootables_parent,
+			texture="assets/textures/wand_texture.png",
+			color=color.rgba(24,15,0,255),
+			**kwargs
+		)
+		self.collider = game.entity_manager.get_model('crate')
+		self.scale *= 5
+		self.origin.y = -0.5
+		self.items = items or [LaserWand, ZapWand, ImpWand]
+	def update(self):
+		pass
+
+	def destroy(self):
 		destroy(self)

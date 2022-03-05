@@ -1,36 +1,41 @@
 from ursina import *
 from .inventory import Inventory, HotBar, BaseBoltWand, LaserWand, ZapWand, ImpWand
 from ursina.prefabs.health_bar import HealthBar
-
+from .entities import Chest
 UI_SCALE = 0.060
 INVENTORY_WIDTH, INVENTORY_HEIGHT =8,1
 SHOOT_ANIMATION_LENGTH = 0.19
+CHEST_INTERACTION_DISTANCE = 100
 
 class MeshWalker(Entity):
-	def __init__(self, game, *args, speed = 100, **kwargs):
+	def __init__(self, game, *args, speed = 50, height = 1, **kwargs):
 		self.game = game
 		Entity.__init__(self, *args, color = color.clear, **kwargs)
 
 		self.speed = speed
-		self.height = 2
+		self.run_multiplier = 1.75
+
+		self.height = 50
 		self.camera_pivot = Entity(parent=self, y=self.height)
 
 		camera.parent = self.camera_pivot
 		camera.position = (0,0,0)
 		camera.rotation = (0,0,0)
 		camera.fov = 90
+		camera.lens.setFar((self.game.radius+5)*self.game.map_scale)
 		mouse.locked = True
 		self.mouse_sensitivity = Vec2(40, 40)
 
 		self.gravity = 1
 		self.grounded = False
+		self.running = False
 		self.jump_up_duration = .3
 		self.fall_after = .35 # will interrupt jump up
 		self.jumping = False
 		self.air_time = 0
 		self.cursor = Entity(parent=camera.ui, model='quad', texture="assets/textures/crosshair", scale=.023)
 		self.jump_height = 160
-		self.height = 10
+		self.height = height
 		self.camera_pivot.y = self.height + 0.5 * self.height
 		self.camera_pivot.z = self.height * 0.5
 		self.gravity = 1
@@ -41,24 +46,26 @@ class MeshWalker(Entity):
 
 		self.collider = BoxCollider(self, size=2*Vec3(self.height, self.height, self.height))
 		self.hotbar = HotBar(
-			self,
+			self.game,
 			scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE),
 			position = (-(0.5*UI_SCALE*INVENTORY_WIDTH),-0.5+UI_SCALE*(INVENTORY_HEIGHT+0.25)),
 			on_selection = self.on_selection,
 		)
 		self.inventory = Inventory(
-			self,
+			self.game,
+			scale =(UI_SCALE*INVENTORY_WIDTH,3*UI_SCALE),
+			position = (-0.5*UI_SCALE*INVENTORY_WIDTH,- 0.5 * UI_SCALE),
+			rows=3
+		)
+		self.chest_inventory = Inventory(
+			self.game,
 			scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE*INVENTORY_HEIGHT),
 			position = (-0.5*UI_SCALE*INVENTORY_WIDTH,UI_SCALE*(INVENTORY_HEIGHT+0.5)),
 		)
-		self.chest_inventory = Inventory(self,
-			scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE*INVENTORY_HEIGHT),
-			position = (-0.5*UI_SCALE*INVENTORY_WIDTH,- 0.5 * UI_SCALE),
-		)
 		self.inventories = [self.hotbar, self.inventory, self.chest_inventory]
-		self.hotbar.append(LaserWand(self.game, self.hotbar))
-		self.hotbar.append(ZapWand(self.game, self.hotbar))
-		self.hotbar.append(ImpWand(self.game, self.hotbar))
+		self.hotbar.append(ZapWand)
+		self.hotbar.append(LaserWand)
+		self.hotbar.append(ImpWand)
 
 		self.inventory_enabled = False
 		self.in_chest = False
@@ -94,11 +101,16 @@ class MeshWalker(Entity):
 		self.input_map = {
 			# 'escape' : self.exit,
 			# 'tab' : self.toggle_debug,
-			'e' : self.toggle_inventory,
+			# 'e' : self.toggle_inventory,
+		}
+
+		self.bind_map = {
 			'scroll up' : self.hotbar.bump_selection_down,
 			'scroll down' : self.hotbar.bump_selection_up,
 			'space' : self.jump,
+			'e' : self.toggle_inventory,
 		}
+
 		self.keys_awaiting_release = []
 		self.item_on_action = None
 
@@ -119,8 +131,8 @@ class MeshWalker(Entity):
 				self.keys_awaiting_release.append(k)
 
 	def input(self, key):
-		if self.input_map.get(key):
-			self.input_map.get(key)()
+		if self.bind_map.get(key):
+			self.bind_map.get(key)()
 
 	def jump(self):
 		if not self.grounded:
@@ -143,6 +155,7 @@ class MeshWalker(Entity):
 			
 		if self.movement_enabled:
 			if held_keys['left mouse']:self.shoot()
+			elif held_keys['right mouse']:self.interact()
 			self.held_item.rotation = self.held_item.base_rotation + (1*math.sin(time.time()*1.7)-1,0,0)
 			self.held_item.gem.rotation_y += time.dt*360
 			self.held_item.gem.y = 0.65 + 0.6 * math.sin(time.time()*1.7)
@@ -166,7 +179,14 @@ class MeshWalker(Entity):
 				self.forward * (held_keys['w'] - held_keys['s'])
 				+ self.right * (held_keys['d'] - held_keys['a'])
 				).normalized()
+			if any((held_keys['w'],held_keys['a'],held_keys['s'],held_keys['d'])):
+				if held_keys['left control'] and not self.running:
+					self.running = True
+			else:
+				self.running = False
 
+			if self.running:
+				self.direction *= self.run_multiplier
 			self.position += self.direction * self.speed * time.dt
 
 			if self.grounded:
@@ -185,16 +205,15 @@ class MeshWalker(Entity):
 	def shoot(self):
 		if not self.held_item.on_cooldown:
 			self.shoot_animation_timer = SHOOT_ANIMATION_LENGTH
-			self.held_item.on_cooldown = True
-			from ursina.prefabs.ursfx import ursfx
-			ursfx([(0.0, 0.07), (0.06, 0.17), (0.22, 0.1), (0.44, 0.09), (0.71, 0.0)], volume=0.75, wave='noise', speed=1.0)
-			cam = self.game.player.position+(0,self.game.player.height,0)+self.game.player.camera_pivot.forward*5
-			
+			self.held_item.on_cooldown = True		
 			if self.item_on_action:
+				self.game.audio_handler.wand_sound.play()
 				self.item_on_action()
 
-			# self.game.entity_manager.spawn_fireball(cam, cam+self.game.player.camera_pivot.forward, hostile = False)
-			# self.zap()
+	def interact(self):
+		if mouse.hovered_entity and type(mouse.hovered_entity) is Chest:
+			if distance(mouse.hovered_entity, self) < CHEST_INTERACTION_DISTANCE:
+				self.show_chest(mouse.hovered_entity)
 
 	def zap(self):
 		self.held_item.bolt.visible = True
@@ -233,7 +252,7 @@ class MeshWalker(Entity):
 		self.chest_inventory.clear()
 		self.chest_inventory.visible = True
 		for i in chest.items:
-			self.chest_inventory.append(i, 1)
+			self.chest_inventory.append(i)
 
 	def exit_chest(self):
 		self.in_chest = False
@@ -280,9 +299,6 @@ class MeshWalker(Entity):
 
 	def on_selection(self, item):
 		self.item = item
-		# if hasattr(self.held_item, 'bolt'): destroy(self.held_item.bolt)
-		# destroy(self.held_item.gem)
-		# destroy(self.held_item)
 		if item:
 			print(item)
 			self.held_item.visible = True

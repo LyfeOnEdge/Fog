@@ -1,6 +1,42 @@
 from ursina import *
 from PIL import Image
-from numpy import uint8, asarray
+from numpy import uint8, asarray, swapaxes
+
+
+MAP_SIZE = 100
+
+# Not implemented yet
+# map_shader=Shader(language=Shader.GLSL,
+# vertex='''
+# #version 140
+# in vec4 p3d_Vertex;
+# out vec4 map_color;
+# uniform vec2 texture_scale;
+# uniform vec2 texture_offset;
+# uniform mat4 p3d_ModelViewProjectionMatrix;
+# uniform float mapdata[256];
+# uniform int map_size;
+# void main() {
+# 	gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
+# 	float luma = mapdata[gl_VertexID];
+# 	map_color = vec4(luma,luma,luma,1.0);
+# }
+# ''',
+# fragment='''
+# #version 140
+# in vec2 texcoords;
+# in vec4 map_color;
+# out vec4 fragColor;
+# void main() {
+# 	fragColor = map_color.rgba;
+# }
+# ''',
+# default_input={
+# 	'texture_scale' : Vec2(1,1),
+# 	'texture_offset' : Vec2(0.0, 0.0),
+# 	'map_size': MAP_SIZE,
+# }
+# )
 
 class MiniMap(Entity):
 	def __init__(self, game):
