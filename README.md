@@ -1,6 +1,6 @@
-README.md
+## README.md
 
-TODO:
+### TODO:
 Seed deterministic spawns
 reimplement save system
 add sword and bow
@@ -13,5 +13,14 @@ heart restores more health as time goes
 make enemies attack
 
 
-CREDITS:
+### CREDITS:
 Audio by atriumthewriter: https://github.com/atriumthewriter/music-i-have-done
+
+Many of the custom shaders are modified versions of the default ursina shaders
+
+https://github.com/ashima/webgl-noise/blob/master/src/noise3D.glsl [MIT] - Used in the 
+
+
+
+### SPECIAL THANKS:
+

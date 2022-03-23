@@ -1,5 +1,4 @@
 from ursina import *
-from .inventory import Inventory, HotBar, BaseBoltWand, LaserWand, ZapWand, ImpWand
 from ursina.prefabs.health_bar import HealthBar
 from .entities import Chest
 UI_SCALE = 0.060
@@ -25,7 +24,7 @@ class MeshWalker(Entity):
 		camera.lens.setFar((self.game.radius+5)*self.game.map_scale)
 		mouse.locked = True
 		self.mouse_sensitivity = Vec2(40, 40)
-
+		self.movement_enabled = True
 		self.gravity = 1
 		self.grounded = False
 		self.running = False
@@ -46,78 +45,41 @@ class MeshWalker(Entity):
 
 		self.collider = BoxCollider(self, size=2*Vec3(self.height, self.height, self.height))
 		
-		if hasattr(self.game, 'entity_manager'):
+		self.air_time = 0
+		self.origin = -0.5
+		self.last_selected_item = None
+		# self.health_bar = HealthBar(bar_color=color.gray, roundness=.5, value=100)
+		# self.health_bar.position = (-0.5*self.health_bar.scale.x, .45)
 
-			self.hotbar = HotBar(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE),
-				position = (-(0.5*UI_SCALE*INVENTORY_WIDTH),-0.5+UI_SCALE*(INVENTORY_HEIGHT+0.25)),
-				on_selection = self.on_selection,
-			)
-			self.inventory = Inventory(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,3*UI_SCALE),
-				position = (-0.5*UI_SCALE*INVENTORY_WIDTH,- 0.5 * UI_SCALE),
-				rows=3
-			)
-			self.chest_inventory = Inventory(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE*INVENTORY_HEIGHT),
-				position = (-0.5*UI_SCALE*INVENTORY_WIDTH,UI_SCALE*(INVENTORY_HEIGHT+0.5)),
-			)
-			self.inventories = [self.hotbar, self.inventory, self.chest_inventory]
-			self.hotbar.append(ZapWand)
-			self.hotbar.append(LaserWand)
-			self.hotbar.append(ImpWand)
+		# self.key_symbol = Entity(model='assets/models/key', parent=camera.ui, position=(-0.45*camera.aspect_ratio,.45), texture="assets/textures/key_texture_menu.png", rotation=(0,90,0), color=color.white, z=-1)
+		# self.key_symbol.scale=0.03
 
-			self.inventory_enabled = False
-			self.in_chest = False
-			self.current_chest = None
-			self.exit_chest()
-			self.held_item = Entity(model=self.game.entity_manager.get_model("wand_default"), parent=camera, position=(0.6,-.5,.25), scale=0.35, origin_z=-.5, color=color.rgb(200,150,150), texture="assets/textures/wand_texture.png", on_cooldown=False)
-			self.held_item.gem = Entity(model=self.game.entity_manager.get_model("wand_orb"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True)
-			self.held_item.bolt = Entity(model=self.game.entity_manager.get_model("wand_bolt"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True, visible=False)
-			self.held_item.rotation_x = 90
-			self.held_item.rotation_z = 12
-			# self.held_item.muzzle_flash.rotation_y = 90
-			# self.held_item.muzzle_flash.rotation_x = -90
-			self.held_item.base_rotation = self.held_item.rotation
-			self.shoot_animation_timer = 0
-			self.air_time = 0
-			self.origin = -0.5
-			self.last_selected_item = None
-			self.health_bar = HealthBar(bar_color=color.gray, roundness=.5, value=100)
-			self.health_bar.position = (-0.5*self.health_bar.scale.x, .45)
-
-			self.key_symbol = Entity(model='assets/models/key', parent=camera.ui, position=(-0.45*camera.aspect_ratio,.45), texture="assets/textures/key_texture_menu.png", rotation=(0,90,0), color=color.white, z=-1)
-			self.key_symbol.scale=0.03
-
-			self.key_text = Text(
-				parent=camera.ui,
-				text="x 0",
-				color=color.white,
-				origin=(-0.5,0),
-			)
-			self.key_text.position = self.key_symbol.position + (self.key_symbol.scale.x,0,0)
+		# self.key_text = Text(
+		# 	parent=camera.ui,
+		# 	text="x 0",
+		# 	color=color.white,
+		# 	origin=(-0.5,0),
+		# )
+		# self.key_text.position = self.key_symbol.position + (self.key_symbol.scale.x,0,0)
 
 
-			self.input_map = {
-				# 'escape' : self.exit,
-				# 'tab' : self.toggle_debug,
-				# 'e' : self.toggle_inventory,
-			}
+		self.input_map = {
+			# 'escape' : self.exit,
+			# 'tab' : self.toggle_debug,
+			# 'e' : self.toggle_inventory,
+		}
 
-			self.bind_map = {
-				'scroll up' : self.hotbar.bump_selection_down,
-				'scroll down' : self.hotbar.bump_selection_up,
-				'space' : self.jump,
-				'e' : self.toggle_inventory,
-			}
+		self.bind_map = {
+			# 'scroll up' : self.hotbar.bump_selection_down,
+			# 'scroll down' : self.hotbar.bump_selection_up,
+			'space' : self.jump,
+			# 'e' : self.toggle_inventory,
+		}
 
-			self.keys_awaiting_release = []
-			self.item_on_action = None
+		self.keys_awaiting_release = []
+		self.item_on_action = None
 
-			self.hotbar.trigger()
+		# self.hotbar.trigger()
 
 	def input_task(self):
 		current_keys = []
@@ -157,24 +119,6 @@ class MeshWalker(Entity):
 		self.input_task()
 			
 		if self.movement_enabled:
-			if held_keys['left mouse']:self.shoot()
-			elif held_keys['right mouse']:self.interact()
-			self.held_item.rotation = self.held_item.base_rotation + (1*math.sin(time.time()*1.7)-1,0,0)
-			self.held_item.gem.rotation_y += time.dt*360
-			self.held_item.gem.y = 0.65 + 0.6 * math.sin(time.time()*1.7)
-			self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity[1]
-
-			if self.held_item.on_cooldown: 
-				self.shoot_animation_timer -= time.dt
-				if self.shoot_animation_timer <= 0:
-					self.held_item.on_cooldown = False
-					self.shoot_animation_timer = 0
-				else:
-					d = -12*math.sin(((SHOOT_ANIMATION_LENGTH-self.shoot_animation_timer)*(2*math.pi)))
-					self.held_item.rotation += (d,0,0)
-
-			self.held_item.bolt.rotation_y = 3.7*(self.held_item.base_rotation.x-self.held_item.rotation.x)-12
-
 			self.camera_pivot.rotation_x -= mouse.velocity[1] * self.mouse_sensitivity[0]
 			self.camera_pivot.rotation_x= clamp(self.camera_pivot.rotation_x, -90, 90)
 

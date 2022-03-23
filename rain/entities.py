@@ -3,7 +3,6 @@ from .settings import settings
 # from .lighting import LitObject, LitPointLight
 import numpy as np
 from .inventory import LaserWand, ZapWand, ImpWand
-from .chunk_shader import chunk_shader
 
 FAIRY_MAX_VELOCITY = 25
 FAIRY_THRUST = 2.2
@@ -366,36 +365,6 @@ class HeightMesh(Mesh):
 
 				i += 1
 		super().__init__(vertices=self.vertices, triangles=self.triangles, uvs=self.uvs, normals=self.normals)
-
-#This entity is a base, when writing a game you would want to do stuff like spawning foliage etc when the chunk is initialized.
-class Chunk(Entity):
-	def __init__(self, game, chunk_id, heightmap, **kwargs):
-		Entity.__init__(
-				self,
-				model=HeightMesh(heightmap),
-				texture="assets/textures/grass.png",
-				shader=chunk_shader,
-				color=color.rgb(80,100,100),
-				**kwargs,
-			)
-		self.game, self.chunk_id, self.heightmap = game, chunk_id, heightmap
-		# self.collider = self.model
-		if self.collider: del self.collider
-		self.collider = None
-		self.chunk_entities = []
-		self.foliage_tokens = []
-		lhm = len(self.heightmap)
-		self.set_shader_input('mapdata', self.heightmap.copy().reshape(lhm*lhm).tolist())
-		self.set_shader_input('base_position', self.position)
-	# def save(self):
-	# 	x,z = self.chunk_id
-	# 	filename = self.game.saves_dir+f"{x}x{z}#{self.game.seed}.json"
-	# 	with open(filename, "w+") as f:
-	# 		json.dump({"heightmap":self.heightmap}, f)
-	def update(self):
-		self.set_shader_input('player_position', self.game.player.position)
-
-
 
 class HealthPickup(Entity):
 	def __init__(self, game, *args, **kwargs):

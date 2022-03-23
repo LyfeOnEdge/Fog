@@ -1,6 +1,6 @@
 from ursina import *
 from rain import combine_targets, EntityManager, rotating_skybox, \
-	settings, Chunk, TerrainGenerator, Mushroom, Tree, MiniMap, \
+	settings, chunk, TerrainGenerator, Mushroom, Tree, MiniMap, \
 	AudioHandler, HotBar, Inventory, MeshWalker, Chest, BigTree, \
 	SnowCloud, FoliageManager
 # from ursina.shaders import instancing_shader
@@ -104,7 +104,7 @@ class GameWithChunkloading(Ursina):
 		x,z=chunk_id
 		heightmap = []
 		heightmap = self.terrain_generator.get_chunk_heightmap(x,z)
-		c = Chunk(
+		c = chunk(
 			self,
 			chunk_id = chunk_id,
 			heightmap=heightmap,

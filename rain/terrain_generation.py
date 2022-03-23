@@ -15,24 +15,25 @@ class TerrainGenerator:
 		self.array_generator2 = OpenSimplex(seed=(self.game.seed+7)).noise2array
 		self.array_generator3 = OpenSimplex(seed=(self.game.seed+13)).noise2array
 		self.array_generator4 = OpenSimplex(seed=(self.game.seed+19)).noise2array
+		self.combined_weight = 1+self.game.settings.second_generator_weight+self.game.settings.third_generator_weight+self.game.settings.fourth_generator_weight
 
 	def get_heightmap(self,x,z):
-		height = self.generator(x,z) 
+		height = self.generator(x*self.game.settings.generator_scale,z*self.game.settings.generator_scale)
 		height = height + self.generator2(x*self.game.settings.second_generator_scale,z*self.game.settings.second_generator_scale) * self.game.settings.second_generator_weight
 		height = height + self.generator3(x*self.game.settings.third_generator_scale,z*self.game.settings.third_generator_scale) * self.game.settings.third_generator_weight
 		height = height + self.generator4(x*self.game.settings.fourth_generator_scale,z*self.game.settings.fourth_generator_scale) * self.game.settings.fourth_generator_weight
-		return height
+		return ((height / self.combined_weight)+1)/2.
 
 	def get_chunk_heightmap(self,x,z):
 		z_values = np.linspace(z, z+1, self.game.settings.chunk_divisions+1, endpoint=True)
 		z_values = np.repeat(z_values,self.game.settings.chunk_divisions+1,axis=0)
 		x_values = np.linspace(x, x+1, self.game.settings.chunk_divisions+1, endpoint=True)
 		x_values = np.hstack((x_values, ) * (self.game.settings.chunk_divisions+1))
-		out = self.array_generator(x_values,z_values).reshape(self.game.settings.chunk_divisions+1,self.game.settings.chunk_divisions+1)
+		out = self.array_generator(x_values*self.game.settings.generator_scale,z_values*self.game.settings.generator_scale).reshape(self.game.settings.chunk_divisions+1,self.game.settings.chunk_divisions+1)
 		out2 = self.array_generator2(x_values*self.game.settings.second_generator_scale,z_values*self.game.settings.second_generator_scale).reshape(self.game.settings.chunk_divisions+1,self.game.settings.chunk_divisions+1)
 		out3 = self.array_generator3(x_values*self.game.settings.third_generator_scale,z_values*self.game.settings.third_generator_scale).reshape(self.game.settings.chunk_divisions+1,self.game.settings.chunk_divisions+1)
 		out4 = self.array_generator4(x_values*self.game.settings.fourth_generator_scale,z_values*self.game.settings.fourth_generator_scale).reshape(self.game.settings.chunk_divisions+1,self.game.settings.chunk_divisions+1)
-		return out + (out2 * self.game.settings.second_generator_weight) + (out3 * self.game.settings.third_generator_weight) + (out4 * self.game.settings.fourth_generator_weight)
+		return (((out + (out2 * self.game.settings.second_generator_weight) + (out3 * self.game.settings.third_generator_weight) + (out4 * self.game.settings.fourth_generator_weight)) / self.combined_weight)+1)/2.
 
 if __name__ == "__main__":
 	# from time import perf_counter

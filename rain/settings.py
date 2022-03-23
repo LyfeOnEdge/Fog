@@ -27,13 +27,14 @@ def remake_settings():
 		"use_perlin" : False,
 		"render_distance":3,
 		"map_scale": 3000,
+		"generator_scale" : 1,
 		"second_generator_scale": 4, #Fine details
 		"second_generator_weight" : 0.3, #Fine details
 		"third_generator_scale": 0.05, #Big details
 		"third_generator_weight" : 8, #Big details
 		"fourth_generator_scale": 0.3, #Big details
 		"fourth_generator_weight" : 5, #Big details
-		"chunk_divisions":20,
+		"chunk_divisions":3,
 		"terrain_x_z_scale":3.2,
 		"player_speed" : 210,
 		"player_height" : 35,
