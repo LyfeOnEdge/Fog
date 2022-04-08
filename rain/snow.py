@@ -5,65 +5,6 @@ if __name__ == '__main__':
 	from settings import settings
 else:
 	from .settings import settings
-snow_shader=Shader(language=Shader.GLSL, vertex='''#version 140
-uniform mat4 p3d_ModelViewProjectionMatrix;
-in vec4 p3d_Vertex;
-in vec2 p3d_MultiTexCoord0;
-out vec2 texcoords;
-out vec4 world_pos;
-uniform mat4 p3d_ModelMatrix;
-uniform vec2 texture_scale;
-uniform vec3 base_position;
-uniform vec3 position_offsets[250];
-uniform vec4 rotation_offsets[250];
-uniform vec3 scale_multipliers[250];
-uniform vec3 fallscale_multipliers[250];
-uniform float snow_height;
-uniform float deltatime;
-uniform float fog_max;
-void main() {
-	vec3 v = p3d_Vertex.xyz * scale_multipliers[gl_InstanceID];
-	vec4 q = rotation_offsets[gl_InstanceID];
-	v = v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-	float y_displacement = fallscale_multipliers[gl_InstanceID].y*deltatime*0.1;
-	int false_mod = int(y_displacement) / int(snow_height) + 1;
-	v.y -= y_displacement - (false_mod * snow_height);
-	//vec3 displacement = vec3(1,-y_displacement,1);
-	vec4 displacement = vec4(v+position_offsets[gl_InstanceID], 1.0);
-	gl_Position = p3d_ModelViewProjectionMatrix * displacement;
-	texcoords = (p3d_MultiTexCoord0 * texture_scale);
-	world_pos = p3d_ModelMatrix * displacement;
-}
-''',
-fragment='''
-#version 140
-uniform sampler2D p3d_Texture0;
-uniform vec4 p3d_ColorScale;
-uniform vec3 player_position;
-uniform float max_distance;
-uniform vec4 base_color;
-uniform vec4 fog_color;
-in vec2 texcoords;
-in vec4 world_pos;
-out vec4 fragColor;
-void main() {
-	float fog_mult = min(1,length(player_position-world_pos.xyz)/max_distance);
-	vec4 color = texture(p3d_Texture0, texcoords) * p3d_ColorScale * (1.0-fog_mult) + fog_mult*fog_color;
-	//vec4 color = mix(base_color, fog_color, fog_mult);
-	fragColor = color.rgba;
-}
-''',
-default_input={
-	'texture_scale' : Vec2(1,1),
-	'position_offsets' : [Vec3(i,0,0) for i in range(250)],
-	'rotation_offsets' : [Vec4(0) for i in range(250)],
-	'scale_multipliers' : [Vec3(1) for i in range(250)],
-	'base_position' : 0,
-	'player_position' : 0,
-	'base_color': color.rgba(200,200,200,255),
-	'fog_color': color.rgba(120,120,120,255),
-}
-)
 
 class snow_entity:
 	__slots__ = ['position', 'rotation', 'scale', 'q', 'fallscale']
@@ -82,7 +23,7 @@ class snow_entity:
 DELAY = 1.0/60.0
 
 class SnowCloud(Entity):
-	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), shader=snow_shader, **kwargs):
+	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), shader=None, **kwargs):
 		if hasattr(game, 'entity_manager'):
 			model = game.entity_manager.get_snow_model()
 		else:
@@ -128,7 +69,7 @@ class SnowCloud(Entity):
 		if time.time() > self.last_update + DELAY:
 			t = time.time()
 			self.set_shader_input('player_position', self.game.player.position)
-			self.set_shader_input('deltatime', t - self.start)
+			self.set_shader_input('shadertime', t - self.start)
 			self.last_update = t
 
 

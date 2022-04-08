@@ -1,11 +1,10 @@
 from ursina import *
 from ursina.prefabs.health_bar import HealthBar #Used for loading screen
-from rain import EntityManager, rotating_skybox, \
-	settings, Chunk, TerrainGenerator, Mushroom, Tree, MiniMap, \
-	AudioHandler, HotBar, Inventory, MeshWalker, Chest, BigTree, \
-	SnowCloud, FoliageManager, CoreEntityManager, PortalSpawner, \
-	generate_chunk_shader, generate_snow_shader, generate_portal_shader
-# from ursina.shaders import instancing_shader
+from rain import EntityManager, RotatingSkybox, \
+	settings, Chunk, TerrainGenerator, MiniMap, \
+	AudioHandler, MeshWalker, Chest, \
+	SnowCloud, FoliageManager, CoreEntityManager, \
+	generate_chunk_shader, generate_snow_shader
 import os, json, time, random
 import numpy as np
 import numba
@@ -15,7 +14,6 @@ MAX_GHOSTS = 25
 MAX_PER_TILE = 4
 GHOST_SPAWN_CHANCE = 0.1
 FAIRY_SPAWN_CHANCE = 0.05
-
 
 MIN_ENTITIES = 7
 MAX_ENTITIES = 15
@@ -86,10 +84,8 @@ class WorldLoader(world_defaults):
 		self.radius_less_one = self.radius-1
 
 	def load(self):
-		self.sky = rotating_skybox(self)
-		# self.foliage_manager = self.game.shared_foliage_manager
+		self.sky = RotatingSkybox(self)
 		self.foliage_manager = FoliageManager(self)
-		
 		self.terrain_generator = TerrainGenerator(self)
 		self.entity_manager = self.game.shared_entity_manager
 
@@ -150,7 +146,7 @@ class WorldLoader(world_defaults):
 		if chunk_id in self.loaded: return
 		x,z=chunk_id
 		heightmap = []
-		c = Chunk(self, chunk_id = chunk_id, shader = generate_chunk_shader(self))
+		c = Chunk(self, chunk_id, generate_chunk_shader(self))
 		print(c.texture)
 		self.loaded[chunk_id] = c
 		num_entities = random.randint(MIN_ENTITIES,MAX_ENTITIES)
@@ -222,27 +218,6 @@ class WorldLoader(world_defaults):
 			print(f"Unloaded chunk {c}")
 		self.game.map_needs_update = True
 
-# class LoadingWheel(Entity):
-#     def __init__(self, **kwargs):
-#         super().__init__()
-#         self.parent = camera.ui
-#         self.point = Entity(parent=self, model=Circle(24, mode='point', thickness=.03), color=color.light_gray, y=.75, scale=2, texture='circle')
-#         self.point2 = Entity(parent=self, model=Circle(12, mode='point', thickness=.03), color=color.light_gray, y=.75, scale=1, texture='circle')
-
-#         self.scale = .025
-#         self.text_entity = Text(world_parent=self, text='loading...', origin=(0,1.5), color=color.light_gray)
-#         self.y = -.25
-
-#         self.bg = Entity(parent=self, model='quad', scale_x=camera.aspect_ratio, color=color.black, z=1)
-#         self.bg.scale *= 400
-
-#         for key, value in kwargs.items():
-#             setattr(self, key ,value)
-
-#     def update(self):
-#         self.point.rotation_y += 5
-#         self.point2.rotation_y += 3
-
 
 class GameWithWorldLoading(Ursina):
 	def __init__(self,*args,**kwargs):
@@ -250,13 +225,9 @@ class GameWithWorldLoading(Ursina):
 		self.settings = settings
 		self.seed = self.game_seed
 		super().__init__(*args, **kwargs)
-		# self.loading_screen = LoadingWheel(enabled=False)
-		# self.loading_bar = HealthBar(max_value=100, value=0, position=(-.5,-.35,-2), scale_x=1, animation_duration=0.1, world_parent=self.loading_screen, bar_color=color.gray)
-		self.entity_manager = CoreEntityManager(self)
-		self.audio_handler = AudioHandler()
-		# self.shared_foliage_manager = FoliageManager(self)
-		self.shared_entity_manager = EntityManager(self)
 
+		self.entity_manager = CoreEntityManager(self)
+		self.shared_entity_manager = EntityManager(self)
 		
 		self.map = MiniMap(self)
 		self.map_needs_update = False
@@ -271,19 +242,12 @@ class GameWithWorldLoading(Ursina):
 		)
 		self.screen_border.enabled = True
 
-		
-
 		self.current_world = WorldLoader(self, default_world)
 		self.current_world.load()
-		self.next_world = WorldLoader(self, flat_world)
-		self.next_world.seed *= 2
-
 		self.snow = SnowCloud(game=self, scale=100, thickness=1, gravity=10, particle_color=color.white, shader = generate_snow_shader(self.current_world))
-		# self.portal_spawner = PortalSpawner(self, 'assets/models/tree1', generate_portal_shader(self.current_world))
-
 		self.player = MeshWalker(self, speed=settings.player_speed, height=settings.player_height, origin_y=-.5)
-
 		self.apply_world_settings(self.current_world)
+		self.audio_handler = AudioHandler()
 
 	def toggle_screen_border(self):
 		self.screen_border.enabled = not self.screen_border.enabled
@@ -291,7 +255,7 @@ class GameWithWorldLoading(Ursina):
 	def transition_worlds(self):
 		self.shared_entity_manager.clear_scene()
 		self.current_world.unload()
-		self.current_world = self.next_world
+		self.current_world = WorldLoader(self, random.choice([default_world, flat_world, amplified_world]))
 		self.current_world.load()
 		self.apply_world_settings(self.current_world)
 
@@ -303,25 +267,6 @@ class GameWithWorldLoading(Ursina):
 			self.screen_border.alpha = self.current_world.overlay_alpha_vector
 		else:
 			self.screen_border.enabled = False
-
-	# def do_update(self):
-	# 	current = self.current_world.last_chunk
-	# 	sz = self.current_world.chunk_divisions * (self.current_world.radius - 1)
-	# 	image = np.zeros((sz,sz), dtype=float)
-	# 	min_z = int(current[1]-self.radius)+1
-	# 	min_x = int(current[0]-self.radius)+1
-	# 	for z in reversed(range(min_z,int(current[1]+self.radius)-1)):
-	# 		for x in reversed(range(min_x,int(current[0]+self.radius)-1)):
-	# 			tile = self.current_world.loaded.get((x,z))
-	# 			x0 = (x-min_x-2)*self.current_world.chunk_divisions/2 + self.current_world.chunk_divisions
-	# 			x1 = x0 + int(self.current_world.chunk_divisions/2)
-	# 			z0 = (z-min_z-2)*self.current_world.chunk_divisions/2 + self.current_world.chunk_divisions
-	# 			z1 = z0 + int(self.current_world.chunk_divisions/2)
-	# 			image[int(z0):int(z1),int(x0):int(x1)] = tile.heightmap[1::2,1::2]
-	# 	image *= 255 #Scale heightmap to proper color
-	# 	image = np.swapaxes(image,0,1)
-	# 	self.map.update_minimap(image)
-	# 	self.map_needs_update = False
 
 	def do_update(self):
 		current = self.current_world.last_chunk
@@ -337,7 +282,6 @@ class GameWithWorldLoading(Ursina):
 				z0 = (z-min_z-2)*self.current_world.chunk_divisions/2 + self.current_world.chunk_divisions
 				z1 = z0 + int(self.current_world.chunk_divisions/2)
 				copy_chunk_image(x0, x1, z0, z1, image, tile.heightmap)
-				# image[int(z0):int(z1),int(x0):int(x1)] = tile.heightmap[1::2,1::2]
 		self.map.update_minimap(translate_image(multiply_image(image)))
 		self.map_needs_update = False
 

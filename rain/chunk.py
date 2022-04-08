@@ -10,64 +10,12 @@ from panda3d.core import GeomLines, TextureStage, TexGenAttrib, GeomVertexWriter
 
 from opensimplex import OpenSimplex
 
-
 if __name__ == '__main__':
 	from settings import settings
 else:
 	from .settings import settings
 
 window.borderless = False
-
-chunk_shader=Shader(language=Shader.GLSL,
-vertex=f'''
-#version 140
-in vec4 p3d_Vertex;
-in vec2 p3d_MultiTexCoord0;
-uniform mat4 p3d_ModelViewProjectionMatrix;
-uniform mat4 p3d_ModelMatrix;
-
-''' + '''
-out vec2 texcoords;
-out vec4 world_pos;
-void main() {
-	{}
-	gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
-	texcoords = p3d_MultiTexCoord0;
-	world_pos = p3d_ModelMatrix * p3d_Vertex;
-}
-''',
-fragment='''
-#version 140
-in vec2 texcoords;
-out vec4 fragColor;
-in vec4 world_pos;
-uniform sampler2D p3d_Texture0;
-uniform vec4 p3d_ColorScale;
-uniform float fog_max;
-uniform vec4 fog_color;
-uniform vec3 player_position;
-uniform float map_scale;
-uniform float terrain_y_scale;
-void main() {
-	float fog_mult = min(1,length(player_position-world_pos.xyz)/fog_max);
-	float map_luma = world_pos.y / (map_scale * terrain_y_scale);
-	//vec4 color = mix(vec4(map_luma,map_luma,map_luma,1) * texture(p3d_Texture0, texcoords) * p3d_ColorScale, fog_color, fog_mult);
-	
-	fragColor = texture(p3d_Texture0, texcoords) * p3d_ColorScale;
-	fragColor *= vec4(map_luma,map_luma,map_luma,1);
-	fragColor = mix(fragColor, fog_color, fog_mult);
-	//fragColor = color.rgba;
-}
-''',
-default_input={
-	'texture_scale' : Vec2(1,1),
-	'texture_offset' : Vec2(0.0, 0.0),
-	'fog_color': color.rgba(120,120,120,255),
-	'fog_max': settings.map_scale*(settings.render_distance-0.5),
-	'map_scale': settings.map_scale,
-	'terrain_y_scale': 1
-}
-)
 
 class Chunk(Entity):
 	grid_size = settings.chunk_divisions
@@ -99,7 +47,7 @@ class Chunk(Entity):
 			tris[row, col, 5] = i + 1 + positions.shape[1]
 	tris = tris.ravel()
 
-	def __init__(self, world, chunk_id, shader = chunk_shader):
+	def __init__(self, world, chunk_id, shader):
 		self.world, self.chunk_id = world, chunk_id
 		x,z = chunk_id
 		heights = world.terrain_generator.get_chunk_heightmap(self.xs.ravel()+x,self.zs.ravel()+z)
@@ -113,13 +61,9 @@ class Chunk(Entity):
 		Entity.__init__(self, model=mesh, shader=shader, color=world.color, scale = world.map_scale, position=(x*self.world.map_scale,0,z*self.world.map_scale))
 		self.set_shader_input('player_position', (0,0,0))
 		self.set_shader_input('terrain_y_scale', world.terrain_y_scale)
-		# self.set_shader_input('mapdata', heights.ravel().tolist())
 		self.chunk_entities = []
 		self.foliage_tokens = []
 		self.portals = []
-
-	# def update(self):
-	# 	self.set_shader_input('player_position', self.world.game.player.position)
 
 class FastMesh(NodePath):
 	def __init__(self, vertices=None, triangles=None, colors=None, uvs=None, normals=None, static=True, mode='triangle', thickness=1, render_points_in_3d=True):
@@ -139,7 +83,7 @@ class FastMesh(NodePath):
 			self.generate()
 
 		tex = loader.loadTexture('assets/textures/grass.png')
-		# self.setTexGen(TextureStage.getDefault(), TexGenAttrib.MWorldPosition)
+
 		self.setTexture(tex)
  
 	def generate(self):  # call this after setting some of the variables to update it

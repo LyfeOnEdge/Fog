@@ -3,20 +3,6 @@ from types import SimpleNamespace
 
 TERRAIN_Y_SCALE = 6
 def remake_settings():
-	# setting_dict = {
-	# 	"devMode" : True,
-	# 	"keep_topmost" : False,
-	# 	"borderless" : True,
-	# 	"fullscreen" : False,
-	# 	"terrain_y_scale" : TERRAIN_Y_SCALE,
-	# 	"fairy_max_height" : TERRAIN_Y_SCALE/3,
-	# 	"use_perlin" : False,
-	# 	"num_generators": 4,
-	# 	"render_distance":8,
-	# 	"map_scale": 300,
-	# 	"chunk_divisions":7,
-	# 	"terrain_x_z_scale":0.4,
-	# }
 	setting_dict = {
 		"devMode" : True,
 		"keep_topmost" : False,

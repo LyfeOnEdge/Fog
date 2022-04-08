@@ -1,6 +1,5 @@
 from ursina import *
 from .settings import settings
-# from .lighting import LitObject, LitPointLight
 import numpy as np
 from .inventory import LaserWand, ZapWand, ImpWand
 
@@ -13,8 +12,6 @@ TIKI_NOTICE_RANGE = 2.2*settings.map_scale
 TIKI_ATTACK_RANGE = 1*settings.map_scale
 TIKI_MIN_RANGE = 0.75*settings.map_scale
 
-# NORMAL = 0
-# ALERT = 1
 NORMAL = 0
 FIRING_1 = 1
 FIRING_2 = 2
@@ -585,25 +582,6 @@ class PlayerFireBall(Entity):
 	def destroy(self):
 		# self.world.entity_manager.unassign_light(self.light)
 		destroy(self)
-
-
-
-
-
-
-# class Chest(Entity):
-# 	def __init__(self, world, items=None, *args, **kwargs):
-# 		mesh = Cube()
-# 		Entity.__init__(self,*args,model=deepcopy(mesh),**kwargs)
-# 		self.collider = deepcopy(mesh)
-# 		self.world = world
-# 		self.items = items or [LaserWand, ZapWand, ImpWand]
-# 		# self.scale *= 5
-
-# 	def destroy(self): #Overwrite this
-# 		destroy(self)
-
-
 
 class Chest(Entity):
 	def __init__(self, world, items=None, *args, **kwargs):

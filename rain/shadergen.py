@@ -2,8 +2,7 @@ from ursina import Shader, Vec2, Vec3, Vec4
 import os
 VERSION = '''#version 140
 '''
-STANDARD_VERT_HEAD = '''
-//STANDARD_HEADER
+STANDARD_VERT_HEAD = '''//STANDARD HEAD
 in vec4 p3d_Vertex;
 in vec2 p3d_MultiTexCoord0;
 uniform vec2 texture_scale;
@@ -14,26 +13,26 @@ out vec2 texcoords;
 out vec4 world_pos;
 void main() {
 '''
-INSTANCING_VERT_HEAD = '''
+INSTANCING_VERT_HEAD = '''//INSTANCING HEAD
 uniform vec3 position_offsets[250];
 uniform vec4 rotation_offsets[250];
 uniform vec3 scale_multipliers[250];
 '''
-SNOW_VERT_HEAD = '''
+SNOW_VERT_HEAD = '''//SNOW HEAD
 uniform vec3 fallscale_multipliers[250];
 uniform float snow_height;
 '''
-TIMED_VERT_HEAD = '''
+TIMED_VERT_HEAD = '''//TIMED VERT HEAD
 uniform float shadertime;
 '''
-STANDARD_VERT_BODY = '''
+STANDARD_VERT_BODY = '''//STANDARD VERT BODY
 texcoords = (p3d_MultiTexCoord0 * texture_scale) + texture_offset;
 '''
-STANDARD_VERT_BODY_NON_INSTANCED = '''
+STANDARD_VERT_BODY_NON_INSTANCED = '''//STANDARD NON-INSTANCED VERT BODY CONTINUATION
 gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
 world_pos = p3d_ModelMatrix * p3d_Vertex;
 '''
-STANDARD_VERT_BODY_INSTANCED = '''
+STANDARD_VERT_BODY_INSTANCED = '''//STANDARD INSTANCED VERT BODY CONTINUATION
 vec3 v = p3d_Vertex.xyz * scale_multipliers[gl_InstanceID];
 vec4 q = rotation_offsets[gl_InstanceID];
 v = v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
@@ -42,12 +41,12 @@ vec4 displacement = vec4(v+position_offsets[gl_InstanceID], 1.0);
 gl_Position = p3d_ModelViewProjectionMatrix * displacement;
 world_pos = p3d_ModelMatrix * displacement;
 '''
-SNOW_VERT_BODY_INSERTION = '''
+SNOW_VERT_BODY_INSERTION = '''//SNOW VERT BODY INSERTION
 float y_displacement = fallscale_multipliers[gl_InstanceID].y*shadertime*0.1;
 int false_mod = int(y_displacement) / int(snow_height) + 1;
 v.y -= y_displacement - (false_mod * snow_height);
 '''
-STANDARD_FRAG_HEAD = '''
+STANDARD_FRAG_HEAD = '''//STANDARD FRAG HEAD
 in vec4 world_pos;
 in vec2 texcoords;
 uniform sampler2D p3d_Texture0;
@@ -55,13 +54,13 @@ uniform vec4 p3d_ColorScale;
 out vec4 fragColor;
 void main() {
 '''
-STANDARD_FRAG_BODY = '''
+STANDARD_FRAG_BODY = '''//STANDARD FRAG BODY
 fragColor = texture(p3d_Texture0, texcoords) * p3d_ColorScale;
 '''
-TIMED_FRAG_HEAD = '''
+TIMED_FRAG_HEAD = '''//TIMED FRAG HEAD
 uniform float shadertime;
 '''
-PORTAL_FRAG_HEADER = """
+PORTAL_FRAG_HEAD = """//START PORTAL FRAG HEAD
 /*
 author: [Ian McEwan, Ashima Arts]
 description: Simplex Noise https://github.com/ashima/webgl-noise
@@ -150,8 +149,9 @@ float snoise(vec3 v){
 	m = m * m;
 	return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
+//END PORTAL FRAG HEAD
 """
-PORTAL_FRAG_BODY = """
+PORTAL_FRAG_BODY = """//PORTAL FRAG BODY
 float x = (texcoords.x - 0.5);
 float y = (texcoords.y - 0.5);
 float len = sqrt(x*x + y*y);
@@ -163,26 +163,24 @@ fragColor = mix(fragColor, noise_color, 0.3);
 vec4 fade_color = vec4(fog_color.rgb, 0);
 fragColor = mix(fragColor,fade_color,(2*len)*(2*len));
 """
-CHUNK_FRAG_HEAD = '''
+CHUNK_FRAG_HEAD = '''//CHUNK FRAG HEAD
 uniform float terrain_y_scale;
 uniform float map_scale;
 '''
-CHUNK_FRAG_BODY = '''
+CHUNK_FRAG_BODY = '''//CHUNK FRAG BODY
 float map_luma = world_pos.y / (map_scale * terrain_y_scale);
 fragColor *= vec4(map_luma,map_luma,map_luma,1);
 '''
-FOG_FRAG_HEAD = '''
+FOG_FRAG_HEAD = '''//FOG FRAG HEAD
 uniform float fog_max;
 uniform vec4 fog_color;
 uniform vec3 player_position;
 '''
-FOG_FRAG_BODY = ''' //Apply Fog
+FOG_FRAG_BODY = '''//FOG FRAG BODY
 float fog_mult = min(1,length(player_position-world_pos.xyz)/fog_max);
 fragColor = mix(fragColor,fog_color,fog_mult);
 '''
-END_SECTION = '''
-}
-'''
+END_SECTION = '}'
 
 def save_generated_shaders(name, vert, frag):
 	if not os.path.isdir('generated/shaders'):
@@ -224,6 +222,7 @@ def generate_snow_shader(world):
 		fragment=frag,
 		default_input=defaults,
 	)
+	save_generated_shaders('snow', vert, frag)
 	return shader
 
 def generate_foliage_shader(world):
@@ -254,6 +253,7 @@ def generate_foliage_shader(world):
 		fragment=frag,
 		default_input=defaults,
 	)
+	save_generated_shaders('foliage', vert, frag)
 	return shader
 
 def generate_chunk_shader(world):
@@ -283,6 +283,7 @@ def generate_chunk_shader(world):
 		fragment=frag,
 		default_input=defaults,
 	)
+	save_generated_shaders('chunk', vert, frag)
 	return shader
 
 def generate_portal_shader(world):
@@ -294,7 +295,7 @@ def generate_portal_shader(world):
 	vert += END_SECTION
 	frag = VERSION
 	frag += TIMED_FRAG_HEAD
-	frag += PORTAL_FRAG_HEADER
+	frag += PORTAL_FRAG_HEAD
 	frag += FOG_FRAG_HEAD
 	frag += STANDARD_FRAG_HEAD
 	frag += STANDARD_FRAG_BODY
@@ -318,7 +319,3 @@ def generate_portal_shader(world):
 	)
 	save_generated_shaders('portal', vert, frag)
 	return shader
-
-
-def generate_world_shaders(world):
-	return generate_chunk_shader(), generate_foliage_shader(), generate_snow_shader(), generate_portal_shader()

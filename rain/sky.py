@@ -1,27 +1,9 @@
 from ursina import *
 import time
 
-class rotating_skybox:
+class RotatingSkybox:
 	def __init__(self, world):
 		self.world = world
-		# self.sky = Sky(
-		# 	model="sphere",
-		# 	double_sided=True,
-		# 	texture = "assets/textures/skybox.jpg",
-		# 	rotation = (0, 90, 0),
-		# 	eternal=True,
-		# 	color=color.rgb(3,3,3),
-		# 	enabled=False
-		# )
-		# self.clouds = Sky(
-		# 	model="sphere",
-		# 	double_sided=True,
-		# 	texture = "assets/textures/clouds2.png",
-		# 	rotation = (0, 90, 0),
-		# 	eternal=True,
-		# 	color=color.rgba(150,150,150,70),
-		# 	scale = self.sky.scale * 0.675
-		# )
 
 		self.walls = Entity(
 			model="sphere",

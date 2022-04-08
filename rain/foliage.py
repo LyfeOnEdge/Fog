@@ -2,78 +2,10 @@ from ursina import *
 from panda3d.core import OmniBoundingVolume, LQuaterniond, LVecBase3d
 from .shadergen import generate_foliage_shader, generate_portal_shader
 
-
 if __name__ == '__main__':
 	from settings import settings
 else:
 	from .settings import settings
-
-# vert, frag = open("assets/shaders/instanced_portal.vert"), open("assets/shaders/instanced_portal.frag")
-# instanced_portal_shader = Shader(
-# 	language=Shader.GLSL,
-# 	vertex=vert.read(),
-# 	fragment=frag.read(),
-# 	default_input={
-# 		'texture_scale' : Vec2(1,1),
-# 		'texture_offset' : Vec2(0.0, 0.0),
-# 		'position_offsets' : [Vec3(0.0)],
-# 		'rotation_offsets' : [Vec4(0.0)],
-# 		'scale_multipliers' : [Vec3(1)],
-# 		'fog_color': color.rgba(120,120,120,255),
-# 		'fog_max': float(settings.map_scale)*(float(settings.render_distance)-0.5),
-# 	}
-# )
-# vert.close(); frag.close()
-
-# foliage_shader=Shader(language=Shader.GLSL, vertex='''#version 140
-# uniform mat4 p3d_ModelViewProjectionMatrix;
-# in vec4 p3d_Vertex;
-# in vec2 p3d_MultiTexCoord0;
-# out vec2 texcoords;
-# uniform vec2 texture_scale;
-# uniform vec2 texture_offset;
-# uniform vec3 position_offsets[256];
-# uniform vec4 rotation_offsets[256];
-# uniform vec3 scale_multipliers[256];
-# uniform mat4 p3d_ModelMatrix;
-# out vec4 world_pos;
-# void main() {
-# 	vec3 v = p3d_Vertex.xyz * scale_multipliers[gl_InstanceID];
-# 	vec4 q = rotation_offsets[gl_InstanceID];
-# 	v = v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-# 	vec4 displacement = vec4(v+position_offsets[gl_InstanceID], 1.0);
-# 	gl_Position = p3d_ModelViewProjectionMatrix * displacement;
-# 	texcoords = (p3d_MultiTexCoord0 * texture_scale) + texture_offset;
-# 	world_pos = p3d_ModelMatrix * displacement;
-# }
-# ''',
-# fragment='''
-# #version 140
-# uniform sampler2D p3d_Texture0;
-# uniform vec4 p3d_ColorScale;
-# in vec2 texcoords;
-# out vec4 fragColor;
-# uniform float fog_max;
-# uniform vec4 fog_color;
-# uniform vec3 player_position;
-# in vec4 world_pos;
-# void main() {
-# 	float fog_mult = min(1,length(player_position-world_pos.xyz)/fog_max);
-# 	vec4 color = mix(texture(p3d_Texture0, texcoords) * p3d_ColorScale, fog_color, fog_mult);
-# 	fragColor = color.rgba;
-# }
-# ''',
-# default_input={
-# 	'texture_scale' : Vec2(1,1),
-# 	'texture_offset' : Vec2(0.0, 0.0),
-# 	'position_offsets' : [Vec3(0.0)],
-# 	'rotation_offsets' : [Vec4(0.0)],
-# 	'scale_multipliers' : [Vec3(1)],
-# 	'fog_color': color.rgba(120,120,120,255),
-# 	'fog_max': float(settings.map_scale)*(float(settings.render_distance)-0.5),
-# }
-# )
-
 
 class PortalSpawner(Entity):
 	def __init__(self, world, model, shader, *args, **kwargs):
@@ -121,13 +53,14 @@ class PortalSpawner(Entity):
 		self.update_shader()
 
 	def update_shader(self):
+		self.set_shader_input('shadertime', time.time()-self.start)
 		self.set_shader_input('position_offsets', self.positions)
 		self.set_shader_input('rotation_offsets', self.quaternions)
 		self.set_shader_input('scale_multipliers',self.scales)
-
-	def update(self):
-		self.set_shader_input('shadertime', time.time()-self.start)
 		self.set_shader_input('player_position', self.world.game.player.position)
+
+	def update_shadertime(self):
+		self.set_shader_input('shadertime', time.time()-self.start)
 
 class FoliageIdentifier:
 	__slots__ = ['tind', 'sind', 'uid']
@@ -147,7 +80,6 @@ class FoliageSpawner(Entity):
 		# self.model.generate()
 		self.shader = shader
 		self.setInstanceCount(0)
-		self.start = time.time()
 		self.positions, self.scales, self.quaternions = [], [], []
 		self.node().setBounds(OmniBoundingVolume())
 		self.node().setFinal(True)
@@ -230,6 +162,7 @@ class FoliageManager:
 				for s in _s:
 					if s.instances:
 						s.set_shader_input('player_position', self.world.game.player.position)
+		self.portal_spawner.update_shadertime()
 		self.tick += 1
 
 # if __name__ == '__main__':
