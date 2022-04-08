@@ -2,8 +2,8 @@ from ursina import *
 import time
 
 class rotating_skybox:
-	def __init__(self, game):
-		self.game = game
+	def __init__(self, world):
+		self.world = world
 		# self.sky = Sky(
 		# 	model="sphere",
 		# 	double_sided=True,
@@ -27,7 +27,7 @@ class rotating_skybox:
 			model="sphere",
 			double_sided=True,
 			texture = "assets/textures/fogwall.png",
-			scale = self.game.map_scale*(self.game.radius)*2,
+			scale = self.world.map_scale*(self.world.radius)*4,
 			rotation = (0, 90, 0),
 			color=color.rgb(50,50,50,255)
 		)
@@ -57,16 +57,16 @@ class rotating_skybox:
 			rotation = (0, 90, 0),
 			eternal=True,
 			color=color.rgba(150,150,150,30),
-			scale= self.walls.scale * 0.6
+			scale= self.walls.scale * 0.45
 		)
 		self.clouds4.scale *= 0.75
 		
 	def update(self):
-		self.walls.position = self.game.player.position
+		self.walls.position = self.world.game.player.position
 		# self.clouds.rotation_y = self.game.player.position
 		# self.clouds2.rotation_y = self.game.player.position
-		self.clouds3.rotation_y = self.game.player.position
-		self.clouds4.rotation_y = self.game.player.position
+		self.clouds3.rotation_y = self.world.game.player.position
+		self.clouds4.rotation_y = self.world.game.player.position
 
 		# self.clouds.rotation_y += 1.2 * time.dt
 		# self.clouds2.rotation_y -= 2.4 * time.dt
@@ -75,4 +75,10 @@ class rotating_skybox:
 		self.clouds3.rotation_x -= 0.25 * time.dt
 		self.clouds4.rotation_y -= 2 * time.dt
 
+	def destroy(self):
+		destroy(self.walls)
+		destroy(self.clouds2)
+		destroy(self.clouds3)
+		destroy(self.clouds4)
+		del self
 		

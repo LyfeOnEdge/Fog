@@ -19,7 +19,6 @@ uniform vec4 rotation_offsets[250];
 uniform vec3 scale_multipliers[250];
 uniform vec3 fallscale_multipliers[250];
 uniform float snow_height;
-//uniform float max_distance;
 uniform float deltatime;
 uniform float fog_max;
 void main() {
@@ -38,8 +37,8 @@ void main() {
 ''',
 fragment='''
 #version 140
-//uniform sampler2D p3d_Texture0;
-//uniform vec4 p3d_ColorScale;
+uniform sampler2D p3d_Texture0;
+uniform vec4 p3d_ColorScale;
 uniform vec3 player_position;
 uniform float max_distance;
 uniform vec4 base_color;
@@ -49,8 +48,8 @@ in vec4 world_pos;
 out vec4 fragColor;
 void main() {
 	float fog_mult = min(1,length(player_position-world_pos.xyz)/max_distance);
-	//vec4 color = texture(p3d_Texture0, texcoords) * p3d_ColorScale * (1.0-fog_mult) + fog_mult*fog_color;
-	vec4 color = mix(base_color, fog_color, fog_mult);
+	vec4 color = texture(p3d_Texture0, texcoords) * p3d_ColorScale * (1.0-fog_mult) + fog_mult*fog_color;
+	//vec4 color = mix(base_color, fog_color, fog_mult);
 	fragColor = color.rgba;
 }
 ''',
@@ -61,7 +60,7 @@ default_input={
 	'scale_multipliers' : [Vec3(1) for i in range(250)],
 	'base_position' : 0,
 	'player_position' : 0,
-	'base_color': color.rgba(255,255,255,255),
+	'base_color': color.rgba(200,200,200,255),
 	'fog_color': color.rgba(120,120,120,255),
 }
 )
@@ -83,7 +82,7 @@ class snow_entity:
 DELAY = 1.0/60.0
 
 class SnowCloud(Entity):
-	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), **kwargs):
+	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), shader=snow_shader, **kwargs):
 		if hasattr(game, 'entity_manager'):
 			model = game.entity_manager.get_snow_model()
 		else:
@@ -95,7 +94,7 @@ class SnowCloud(Entity):
 		self.setRenderModePerspective(True)
 		self.instances = []
 		self.model.uvs = [(v[0],v[1]) for v in self.model.vertices]
-		self.shader = snow_shader
+		self.shader = shader
 		self.setInstanceCount(250)
  
 		self.positions = []
@@ -117,7 +116,7 @@ class SnowCloud(Entity):
 		self.last_update = time.time()
 
 		self.set_shader_input('snow_height', 40)
-		self.set_shader_input('max_distance', self.game.map_scale*(self.game.radius-0.5)),
+		self.set_shader_input('max_distance', self.game.current_world.map_scale*(self.game.current_world.radius-0.5)),
 		self.set_shader_input('base_position', self.position)
 		self.set_shader_input('deltatime', 0)
 		self.set_shader_input('fallscale_multipliers', self.fallscales)

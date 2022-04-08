@@ -19,29 +19,58 @@ NORMAL = 0
 FIRING_1 = 1
 FIRING_2 = 2
 FIRING_3 = 3
-# FIRING_4 = 6
- 
+
 KEY_DROP_CHANCE = 1
 STATE_CHANGE_DELAY = 1
 
-
-
-
-class EntityManager:
+class CoreEntityManager:
 	def __init__(self, game):
 		self.game = game
 		self.shootables_parent = Entity(name="shootablesparent")
-		mouse.traverse_target = self.shootables_parent
-
 		self.model_dict = {
 			"wand" : load_model("assets/models/wand"),
 			"wand_default" : load_model("assets/models/wand_default"),
 			"wand_bolt" : load_model("assets/models/wand_bolt"),
 			"wand_bolt_default" : load_model("assets/models/wand_bolt_default"),
 			"wand_orb" : load_model("assets/models/wand_orb"),
+		}
+		points = np.array([Vec3(random.uniform(-10,10),random.uniform(-5,0),random.uniform(-10,10)) for i in range(160)])
+		self.snow=Mesh(vertices=points, mode='point', thickness=8, render_points_in_3d=True)
+
+	def get_model(self, model_name):
+		return deepcopy(self.model_dict.get(model_name))
+
+	def spawn_fireball(self, position, target, *args, hostile = True, **kwargs):
+		if hostile:
+			ent = self.spawn_entity(FireBall, position, target, *args, texture="assets/textures/clouds.png", parent=self.shootables_parent, **kwargs)
+		else:
+			ent = self.spawn_entity(PlayerFireBall, position, target, *args, texture="assets/textures/clouds.png", parent=self.shootables_parent, **kwargs)
+		return ent
+
+	def spawn_entity(self, clas, position, *args, **kwargs):
+		ent = clas(self.game, *args, position=position, **kwargs)
+		return ent
+
+	def get_snow_model(self):
+		return deepcopy(self.snow)
+
+
+class EntityManager:
+	def __init__(self, game):
+		self.game = game
+		self.shootables_parent = self.game.entity_manager.shootables_parent
+		mouse.traverse_target = self.shootables_parent
+
+		self.model_dict = {
+			# "wand" : load_model("assets/models/wand"),
+			# "wand_default" : load_model("assets/models/wand_default"),
+			# "wand_bolt" : load_model("assets/models/wand_bolt"),
+			# "wand_bolt_default" : load_model("assets/models/wand_bolt_default"),
+			# "wand_orb" : load_model("assets/models/wand_orb"),
 			"chest": load_model("assets/models/chest_large"),
 			"crate": load_model("assets/models/crate"),
-			"crate_collider": load_model("assets/models/crate_collider")
+			"crate_collider": load_model("assets/models/crate_collider"),
+			# "portal": load_model("assets/models/portal2") 
 		}
 
 		self.tiki_models = {
@@ -50,19 +79,9 @@ class EntityManager:
 			FIRING_2 : load_model("assets/models/tiki_firing_2"),
 			FIRING_3 : load_model("assets/models/tiki_firing_3"),
 		}
-		self.active_entities = []
-		self.fairies,self.enemies,self.pickups,self.projectiles,self.chests=[],[],[],[],[]
+		self.entities = []
+		self.fairies,self.enemies,self.pickups,self.projectiles,self.chests, self.portals=[],[],[],[],[],[]
 
-		points = np.array([Vec3(random.uniform(-10,10),random.uniform(-5,0),random.uniform(-10,10)) for i in range(160)])
-		self.snow=Mesh(vertices=points, mode='point', thickness=8, render_points_in_3d=True)
-
-	def get_snow_model(self):
-		return deepcopy(self.snow)
-
-	def spawn_tree(self, position, rotation, *args, **kwargs):
-		return Tree(self.game, position, rotation, self.get_tree(), *args, **kwargs)
-	def spawn_mushroom(self, position, rotation, *args, **kwargs):
-		return Mushroom(self.game, position, rotation, self.get_mushroom(), *args, **kwargs)
 	def spawn_fireball(self, position, target, *args, hostile = True, **kwargs):
 		if hostile:
 			ent = self.spawn_entity(FireBall, position, target, *args, texture="assets/textures/clouds.png", parent=self.shootables_parent, **kwargs)
@@ -78,6 +97,7 @@ class EntityManager:
 		ent.action_models = self.tiki_models
 		self.enemies.append(ent)
 		return ent
+
 	def spawn_fairy(self, position, *args, **kwargs):
 		ent = self.spawn_entity(Fairy, position, *args, parent=self.shootables_parent, **kwargs)
 		self.fairies.append(ent)
@@ -93,11 +113,12 @@ class EntityManager:
 		self.pickups.append(ent)
 		return ent
 	def spawn_entity(self, clas, position, *args, **kwargs):
-		ent = clas(self.game, *args, position=position, **kwargs)
+		ent = clas(self.game.current_world, *args, position=position, **kwargs)
+		self.entities.append(ent)
 		return ent
 
 	def destroy(self, target, unload=False):
-		lists = [self.active_entities, self.fairies, self.enemies, self.pickups, self.projectiles]
+		lists = [self.entities, self.fairies, self.enemies, self.pickups, self.projectiles, self.portals]
 		for l in lists:
 			if target in l:
 				l.remove(target)
@@ -114,10 +135,35 @@ class EntityManager:
 	def get_model(self, model_name):
 		return deepcopy(self.model_dict.get(model_name))
 
+	def clear_scene(self):
+		for e in self.entities: destroy(e)
+		self.entities,self.fairies,self.enemies,self.pickups,self.projectiles,self.chests, self.portals=[],[],[],[],[],[],[]
+
+
+# vert, frag = open("assets/shaders/ripples.vert"), open("assets/shaders/ripples.frag")
+# ripple_shader = Shader(language=Shader.GLSL, vertex = vert.read(), fragment = frag.read())
+# vert.close(); frag.close()
+# class simplex_shaded_entity(Entity):
+# 	def __init__(self, *args, **kwargs):
+# 		Entity.__init__(self, *args, shader=ripple_shader, **kwargs)
+
+# class Portal(simplex_shaded_entity):
+# 	def __init__(self, world, *args, **kwargs):
+# 		self.world = world
+# 		simplex_shaded_entity.__init__(self, *args, model="assets/models/portal2", **kwargs)
+# 		self.start = time.time()
+# 		self.set_shader_input('shadertime', 0)
+# 		self.set_shader_input('player_position', self.world.game.player.position)
+# 		self.set_shader_input('fog_color', self.world.fog_color)
+# 		self.set_shader_input('fog_max', self.world.fog_density[1])
+# 	def update(self):
+# 		self.set_shader_input('shadertime', time.time()-self.start)
+# 		self.set_shader_input('player_position', self.world.game.player.position)
+
 class BaseShootable(Entity):
-	def __init__(self, game, *args, max_hp = 100, **kwargs):
+	def __init__(self, world, *args, max_hp = 100, **kwargs):
 		Entity.__init__(self,*args,**kwargs)
-		self.game = game
+		self.world = world
 		self.action_models = None #Applied by entity manager
 		self.health_bar = Entity(parent=self, y=3, model='cube', color=color.red)
 		self.max_hp = max_hp
@@ -137,7 +183,7 @@ class BaseShootable(Entity):
 	def hp(self, value):
 		self._hp = value
 		if value <= 0:
-			self.game.entity_manager.destroy(self)
+			self.world.entity_manager.destroy(self)
 			return
 
 		self.health_bar.scale = (self.hp / self.max_hp,.1,.1)
@@ -147,10 +193,10 @@ class BaseShootable(Entity):
 		destroy(self)
 
 class Tiki(BaseShootable):
-	def __init__(self, game, *args, **kwargs):
+	def __init__(self, world, *args, **kwargs):
 		BaseShootable.__init__(
 			self,
-			game,
+			world,
 			*args,
 			model='assets/models/tiki_inverted',
 			texture="assets/textures/tiki_texture.png",
@@ -169,8 +215,8 @@ class Tiki(BaseShootable):
 		self.t += (time.dt + time.dt*random.uniform(0.0001,0.001))/3 #Random helps the tikis not move in lockstep
 		# super().update()
 
-		self.look_at(self.game.player)
-		dis_to_player = distance_xz(self, self.game.player)
+		self.look_at(self.world.game.player)
+		dis_to_player = distance_xz(self, self.world.game.player)
 		if dis_to_player < TIKI_ATTACK_RANGE:
 			if time.time() > self.next_state_change:
 				self.state += 1
@@ -197,7 +243,7 @@ class Tiki(BaseShootable):
 
 		self.position += self.velocity
 		# try:
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale+self.game.terrain_y_scale/10
+		terrain_height = self.world.terrain_generator.get_heightmap(self.position[0]/self.world.map_scale,self.position[2]/self.world.map_scale)*self.world.terrain_y_scale+self.world.terrain_y_scale/10
 		if self.position.y < terrain_height:
 			self.position.y = terrain_height
 			self.velocity.y = 1.01 * abs(self.velocity.y)
@@ -212,17 +258,17 @@ class Tiki(BaseShootable):
 		self.position.y = pos
 
 	def attack(self):
-		self.game.entity_manager.spawn_fireball(self.position,self.game.player.position+(0,0.5*self.game.player.height,0))
+		self.world.entity_manager.spawn_fireball(self.position,self.world.game.player.position+(0,0.5*self.world.game.player.height,0))
 
 	def destroy(self): #Overwrite this
 		destroy(self)
 
 class Fairy(BaseShootable):
-	def __init__(self, game, *args, **kwargs):
+	def __init__(self, world, *args, **kwargs):
 		m = load_model("assets/models/invert_orb")
 		BaseShootable.__init__(
 			self,
-			game,
+			world,
 			*args,
 			model=deepcopy(m),
 			texture="assets/textures/clouds.png",
@@ -277,7 +323,7 @@ class Fairy(BaseShootable):
 
 		self.position += self.velocity
 		# try:
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale+self.game.terrain_y_scale/10
+		terrain_height = self.world.terrain_generator.get_heightmap(self.position[0]/self.world.map_scale,self.position[2]/self.world.map_scale)*self.world.terrain_y_scale+self.world.terrain_y_scale/10
 		if self.position.y < terrain_height:
 			self.position.y = terrain_height
 			self.velocity.y = 1.01 * abs(self.velocity.y)
@@ -302,8 +348,8 @@ class Fairy(BaseShootable):
 		destroy(self)
 		
 class BaseLitEntity(Entity):
-	def __init__(self, game, position, rotation, model, *args, color=color.rgb(180,150,120), texture='assets/textures/tree_texture.png', **kwargs):
-		self.game = game
+	def __init__(self, world, position, rotation, model, *args, color=color.rgb(180,150,120), texture='assets/textures/tree_texture.png', **kwargs):
+		self.world = world
 		Entity.__init__(
 			self,
 			*args,
@@ -317,28 +363,28 @@ class BaseLitEntity(Entity):
 		)
 
 class BaseTerrainElement(Entity):
-	def __init__(self, game, *args, **kwargs):
-		self.game = game
+	def __init__(self, world, *args, **kwargs):
+		self.world = world
 		Entity.__init__(self, *args, texture = 'assets/textures/tree_texture.png', **kwargs)
 
 class Tree(BaseTerrainElement):
-	def __init__(self, game, *args, **kwargs):
-		kwargs['model'] = game.entity_manager.get_tree()
+	def __init__(self, world, *args, **kwargs):
+		kwargs['model'] = world.entity_manager.get_tree()
 		kwargs['color'] = color.rgb(180,150,120)
-		BaseTerrainElement.__init__(self, game, *args, **kwargs)
+		BaseTerrainElement.__init__(self, world, *args, **kwargs)
 
 class BigTree(BaseTerrainElement):
-	def __init__(self, game, *args, **kwargs):
-		kwargs['model'] = game.entity_manager.get_big_tree()
+	def __init__(self, world, *args, **kwargs):
+		kwargs['model'] = world.entity_manager.get_big_tree()
 		kwargs['color'] = color.rgb(180,150,120)
-		BaseTerrainElement.__init__(self, game, *args, **kwargs)
+		BaseTerrainElement.__init__(self, world, *args, **kwargs)
 		self.scale *= 2
 
 class Mushroom(BaseTerrainElement):
-	def __init__(self, game, *args, **kwargs):
-		kwargs['model'] = game.entity_manager.get_mushroom()
+	def __init__(self, world, *args, **kwargs):
+		kwargs['model'] = world.entity_manager.get_mushroom()
 		kwargs['color'] = color.rgb(180,150,120)
-		BaseTerrainElement.__init__(self, game, *args, **kwargs)
+		BaseTerrainElement.__init__(self, world, *args, **kwargs)
 
 #This class is a trimmed version of terrain.py that takes a numpy array directly rather than an image
 class HeightMesh(Mesh):
@@ -367,8 +413,8 @@ class HeightMesh(Mesh):
 		super().__init__(vertices=self.vertices, triangles=self.triangles, uvs=self.uvs, normals=self.normals)
 
 class HealthPickup(Entity):
-	def __init__(self, game, *args, **kwargs):
-		self.game = game
+	def __init__(self, world, *args, **kwargs):
+		self.world = world
 		Entity.__init__(
 			self,
 			*args,
@@ -384,20 +430,20 @@ class HealthPickup(Entity):
 		)
 		self.dt = 0
 		self.origin_y = -0.5
-		# self.light = LitPointLight(intensity=1, range = self.game.map_scale)
+		# self.light = LitPointLight(intensity=1, range = self.world.map_scale)
 		# invoke(self.light.setColor, Vec3(0.5,0,0), delay=.0)
 
 	def update(self):
 		# super().update()
 
-		if self.intersects(self.game.player).hit:
-			self.game.player.hp += 10
+		if self.intersects(self.world.player).hit:
+			self.world.player.hp += 10
 			destroy(self)
 			return
 
 		self.dt += time.dt
 
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale+5
+		terrain_height = self.world.terrain_generator.get_heightmap(self.position[0]/self.world.map_scale,self.position[2]/self.world.map_scale)*self.world.terrain_y_scale+5
 		if self.position[1] > terrain_height:
 			self.position = Vec3(self.position[0],self.position[1] - time.dt*200,self.position[2])
 		# self.light.setPosition(self.position)
@@ -408,8 +454,8 @@ class HealthPickup(Entity):
 		destroy(self)		
 
 class KeyPickup(Entity):
-	def __init__(self, game, *args, **kwargs):
-		self.game = game
+	def __init__(self, world, *args, **kwargs):
+		self.world = world
 		Entity.__init__(
 			self,
 			*args,
@@ -427,14 +473,14 @@ class KeyPickup(Entity):
 	def update(self):
 		# super().update()
 
-		if self.intersects(self.game.player).hit:
-			self.game.player.keys += 1
+		if self.intersects(self.world.game.player).hit:
+			self.world.game.player.keys += 1
 			destroy(self)
 			return
 
 		self.dt += time.dt + random.uniform(0.00,0.04)
 
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale+5
+		terrain_height = self.world.terrain_generator.get_heightmap(self.position[0]/self.world.map_scale,self.position[2]/self.world.map_scale)*self.world.terrain_y_scale+5
 		if self.position[1] > terrain_height:
 			self.position = Vec3(self.position[0],self.position[1] - time.dt*200,self.position[2])
 
@@ -445,8 +491,8 @@ class KeyPickup(Entity):
 
 
 class FireBall(Entity):
-	def __init__(self, game, target, *args, **kwargs):
-		self.game = game
+	def __init__(self, world, target, *args, **kwargs):
+		self.world = world
 		Entity.__init__(
 			self,
 			*args,
@@ -464,17 +510,17 @@ class FireBall(Entity):
 		self.origin.y = -0.5
 
 	def update(self):
-		if self.intersects(self.game.player).hit:
-			self.game.player.hp -= 10
+		if self.intersects(self.world.game.player).hit:
+			self.world.game.player.hp -= 10
 			destroy(self)
 			return
 
-		if distance(self, self.game.player) > self.game.map_scale*self.game.radius/2:
-			self.game.entity_manager.destroy(self)
+		if distance(self, self.world.game.player) > self.world.map_scale*self.world.radius/2:
+			self.world.entity_manager.destroy(self)
 			return
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale-1.5
+		terrain_height = self.world.terrain_generator.get_heightmap(self.position[0]/self.world.map_scale,self.position[2]/self.world.map_scale)*self.world.terrain_y_scale-1.5
 		if self.position[1] < terrain_height:
-			self.game.entity_manager.destroy(self)
+			self.world.entity_manager.destroy(self)
 			return
 
 		self.dt += time.dt
@@ -508,7 +554,7 @@ class PlayerFireBall(Entity):
 
 	def update(self):
 		# super().update()
-		for e in self.game.entity_manager.enemies:
+		for e in self.game.current_world.entity_manager.enemies:
 			if self.intersects(e).hit:
 				print("Hit")
 				e.hp -= 10
@@ -516,18 +562,18 @@ class PlayerFireBall(Entity):
 				e.health_bar.enabled = True
 				destroy(self)
 				return
-		for e in self.game.entity_manager.fairies:
+		for e in self.game.current_world.entity_manager.fairies:
 			if self.intersects(e).hit:
 				e.hp -= 10
 				destroy(self)
 				return
 
-		if distance(self, self.game.player) > self.game.map_scale*self.game.radius/2:
-			self.game.entity_manager.destroy(self)
+		if distance(self, self.game.player) > self.game.current_world.map_scale*self.game.current_world.radius/3:
+			self.game.current_world.entity_manager.destroy(self)
 			return
-		terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale-1.5
+		terrain_height = self.game.current_world.terrain_generator.get_heightmap(self.position[0]/self.game.current_world.map_scale,self.position[2]/self.game.current_world.map_scale)*self.game.current_world.terrain_y_scale-1.5
 		if self.position[1] < terrain_height:
-			self.game.entity_manager.destroy(self)
+			self.game.current_world.entity_manager.destroy(self)
 			return
 
 		self.dt += time.dt
@@ -537,7 +583,7 @@ class PlayerFireBall(Entity):
 		self.rotation_z = -1300*self.dt
 
 	def destroy(self):
-		# self.game.entity_manager.unassign_light(self.light)
+		# self.world.entity_manager.unassign_light(self.light)
 		destroy(self)
 
 
@@ -546,11 +592,11 @@ class PlayerFireBall(Entity):
 
 
 # class Chest(Entity):
-# 	def __init__(self, game, items=None, *args, **kwargs):
+# 	def __init__(self, world, items=None, *args, **kwargs):
 # 		mesh = Cube()
 # 		Entity.__init__(self,*args,model=deepcopy(mesh),**kwargs)
 # 		self.collider = deepcopy(mesh)
-# 		self.game = game
+# 		self.world = world
 # 		self.items = items or [LaserWand, ZapWand, ImpWand]
 # 		# self.scale *= 5
 
@@ -560,18 +606,18 @@ class PlayerFireBall(Entity):
 
 
 class Chest(Entity):
-	def __init__(self, game, items=None, *args, **kwargs):
-		self.game = game
+	def __init__(self, world, items=None, *args, **kwargs):
+		self.world = world
 		Entity.__init__(
 			self,
 			*args,
-			model=game.entity_manager.get_model('crate'),
-			parent=game.entity_manager.shootables_parent,
+			model=world.entity_manager.get_model('crate'),
+			parent=world.entity_manager.shootables_parent,
 			texture="assets/textures/wand_texture.png",
 			color=color.rgba(24,15,0,255),
 			**kwargs
 		)
-		self.collider = game.entity_manager.get_model('crate')
+		self.collider = world.entity_manager.get_model('crate')
 		self.scale *= 5
 		self.origin.y = -0.5
 		self.items = items or [LaserWand, ZapWand, ImpWand]

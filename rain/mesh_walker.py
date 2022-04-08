@@ -13,7 +13,7 @@ class MeshWalker(Entity):
 		Entity.__init__(self, *args, color = color.clear, **kwargs)
 
 		self.speed = speed
-		self.run_multiplier = 1.75
+		self.run_multiplier = 2.
 
 		self.height = 50
 		self.camera_pivot = Entity(parent=self, y=self.height)
@@ -22,7 +22,7 @@ class MeshWalker(Entity):
 		camera.position = (0,0,0)
 		camera.rotation = (0,0,0)
 		camera.fov = 90
-		camera.lens.setFar((self.game.radius+5)*self.game.map_scale)
+		camera.lens.setFar(3*(self.game.current_world.radius)*self.game.current_world.map_scale)
 		mouse.locked = True
 		self.mouse_sensitivity = Vec2(40, 40)
 
@@ -41,83 +41,83 @@ class MeshWalker(Entity):
 		self.gravity = 1
 		self._keys = 0
 		# self.collider = BoxCollider(self, Vec3(0,1,0), Vec3(1,2,1))
-		self.y = self.game.terrain_generator.get_heightmap(0,0)*self.game.map_scale*self.game.terrain_y_scale+5 #Ensure player is above map when spawned
+		self.y = self.game.current_world.terrain_generator.get_heightmap(0,0)*self.game.current_world.map_scale*self.game.current_world.terrain_y_scale #Ensure player is above map when spawned
 		self.mouse_sensitivity = Vec2(80, 80)
 
 		self.collider = BoxCollider(self, size=2*Vec3(self.height, self.height, self.height))
 		
-		if hasattr(self.game, 'entity_manager'):
+		self.hotbar = HotBar(
+			self.game,
+			scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE),
+			position = (-(0.5*UI_SCALE*INVENTORY_WIDTH),-0.5+UI_SCALE*(INVENTORY_HEIGHT+0.25)),
+			on_selection = self.on_selection,
+		)
+		self.inventory = Inventory(
+			self.game,
+			scale =(UI_SCALE*INVENTORY_WIDTH,3*UI_SCALE),
+			position = (-0.5*UI_SCALE*INVENTORY_WIDTH,- 0.5 * UI_SCALE),
+			rows=3
+		)
+		self.chest_inventory = Inventory(
+			self.game,
+			scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE*INVENTORY_HEIGHT),
+			position = (-0.5*UI_SCALE*INVENTORY_WIDTH,UI_SCALE*(INVENTORY_HEIGHT+0.5)),
+		)
+		self.inventories = [self.hotbar, self.inventory, self.chest_inventory]
+		self.hotbar.append(ZapWand)
+		self.hotbar.append(LaserWand)
+		self.hotbar.append(ImpWand)
 
-			self.hotbar = HotBar(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE),
-				position = (-(0.5*UI_SCALE*INVENTORY_WIDTH),-0.5+UI_SCALE*(INVENTORY_HEIGHT+0.25)),
-				on_selection = self.on_selection,
-			)
-			self.inventory = Inventory(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,3*UI_SCALE),
-				position = (-0.5*UI_SCALE*INVENTORY_WIDTH,- 0.5 * UI_SCALE),
-				rows=3
-			)
-			self.chest_inventory = Inventory(
-				self.game,
-				scale =(UI_SCALE*INVENTORY_WIDTH,UI_SCALE*INVENTORY_HEIGHT),
-				position = (-0.5*UI_SCALE*INVENTORY_WIDTH,UI_SCALE*(INVENTORY_HEIGHT+0.5)),
-			)
-			self.inventories = [self.hotbar, self.inventory, self.chest_inventory]
-			self.hotbar.append(ZapWand)
-			self.hotbar.append(LaserWand)
-			self.hotbar.append(ImpWand)
+		self.inventory_enabled = False
+		self.in_chest = False
+		self.current_chest = None
+		self.exit_chest()
+		self.held_item = Entity(model=self.game.entity_manager.get_model("wand_default"), parent=camera, position=(0.6,-.5,.25), scale=0.35, origin_z=-.5, color=color.rgb(200,150,150), texture="assets/textures/wand_texture.png", on_cooldown=False)
+		self.held_item.gem = Entity(model=self.game.entity_manager.get_model("wand_orb"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True)
+		self.held_item.bolt = Entity(model=self.game.entity_manager.get_model("wand_bolt"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True, visible=False)
+		self.held_item.rotation_x = 90
+		self.held_item.rotation_z = 12
+		# self.held_item.muzzle_flash.rotation_y = 90
+		# self.held_item.muzzle_flash.rotation_x = -90
+		self.held_item.base_rotation = self.held_item.rotation
+		self.shoot_animation_timer = 0
+		self.air_time = 0
+		self.origin = -0.5
+		self.last_selected_item = None
+		self.health_bar = HealthBar(bar_color=color.gray, roundness=.5, value=100)
+		self.health_bar.position = (-0.5*self.health_bar.scale.x, .45)
 
-			self.inventory_enabled = False
-			self.in_chest = False
-			self.current_chest = None
-			self.exit_chest()
-			self.held_item = Entity(model=self.game.entity_manager.get_model("wand_default"), parent=camera, position=(0.6,-.5,.25), scale=0.35, origin_z=-.5, color=color.rgb(200,150,150), texture="assets/textures/wand_texture.png", on_cooldown=False)
-			self.held_item.gem = Entity(model=self.game.entity_manager.get_model("wand_orb"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True)
-			self.held_item.bolt = Entity(model=self.game.entity_manager.get_model("wand_bolt"), texture="assets/textures/wand_effect.png", parent=self.held_item, z=0.5, y=0.1, world_scale=0.35, origin_y = 0.5, color=color.yellow, enabled=True, visible=False)
-			self.held_item.rotation_x = 90
-			self.held_item.rotation_z = 12
-			# self.held_item.muzzle_flash.rotation_y = 90
-			# self.held_item.muzzle_flash.rotation_x = -90
-			self.held_item.base_rotation = self.held_item.rotation
-			self.shoot_animation_timer = 0
-			self.air_time = 0
-			self.origin = -0.5
-			self.last_selected_item = None
-			self.health_bar = HealthBar(bar_color=color.gray, roundness=.5, value=100)
-			self.health_bar.position = (-0.5*self.health_bar.scale.x, .45)
+		self.key_symbol = Entity(model='assets/models/key', parent=camera.ui, position=(-0.45*camera.aspect_ratio,.45), texture="assets/textures/key_texture_menu.png", rotation=(0,90,0), color=color.white, z=-1)
+		self.key_symbol.scale=0.03
 
-			self.key_symbol = Entity(model='assets/models/key', parent=camera.ui, position=(-0.45*camera.aspect_ratio,.45), texture="assets/textures/key_texture_menu.png", rotation=(0,90,0), color=color.white, z=-1)
-			self.key_symbol.scale=0.03
-
-			self.key_text = Text(
-				parent=camera.ui,
-				text="x 0",
-				color=color.white,
-				origin=(-0.5,0),
-			)
-			self.key_text.position = self.key_symbol.position + (self.key_symbol.scale.x,0,0)
+		self.key_text = Text(
+			parent=camera.ui,
+			text="x 0",
+			color=color.white,
+			origin=(-0.5,0),
+		)
+		self.key_text.position = self.key_symbol.position + (self.key_symbol.scale.x,0,0)
 
 
-			self.input_map = {
-				# 'escape' : self.exit,
-				# 'tab' : self.toggle_debug,
-				# 'e' : self.toggle_inventory,
-			}
+		self.input_map = {
+			# 'escape' : self.exit,
+			# 'tab' : self.toggle_debug,
+			# 'e' : self.toggle_inventory,
+		}
 
-			self.bind_map = {
-				'scroll up' : self.hotbar.bump_selection_down,
-				'scroll down' : self.hotbar.bump_selection_up,
-				'space' : self.jump,
-				'e' : self.toggle_inventory,
-			}
+		self.bind_map = {
+			'scroll up' : self.hotbar.bump_selection_down,
+			'scroll down' : self.hotbar.bump_selection_up,
+			'space' : self.jump,
+			'e' : self.toggle_inventory,
+			'y': self.game.transition_worlds,
+			'o': self.game.toggle_screen_border,
+		}
 
-			self.keys_awaiting_release = []
-			self.item_on_action = None
+		self.keys_awaiting_release = []
+		self.item_on_action = None
 
-			self.hotbar.trigger()
+		self.hotbar.trigger()
 
 	def input_task(self):
 		current_keys = []
@@ -157,11 +157,13 @@ class MeshWalker(Entity):
 		self.input_task()
 			
 		if self.movement_enabled:
+			cur_time = time.time()
+			rot = math.sin(cur_time*1.7)
 			if held_keys['left mouse']:self.shoot()
 			elif held_keys['right mouse']:self.interact()
-			self.held_item.rotation = self.held_item.base_rotation + (1*math.sin(time.time()*1.7)-1,0,0)
+			self.held_item.rotation = self.held_item.base_rotation + (rot,0,0)
 			self.held_item.gem.rotation_y += time.dt*360
-			self.held_item.gem.y = 0.65 + 0.6 * math.sin(time.time()*1.7)
+			self.held_item.gem.y = 0.65 + 0.6 * rot
 			self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity[1]
 
 			if self.held_item.on_cooldown: 
@@ -191,14 +193,15 @@ class MeshWalker(Entity):
 			if self.running:
 				self.direction *= self.run_multiplier
 			self.position += self.direction * self.speed * time.dt
-
+			ms = self.game.current_world.map_scale
 			if self.grounded:
-				self.y = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale
+				self.y = self.game.current_world.terrain_generator.get_heightmap(self.position[0]/ms,self.position[2]/ms)*self.game.current_world.y_scale
 			else:
-				self.air_time += time.dt*2
-				self.y -= (self.gravity*(self.air_time+0.5))**(2)
+				mult = 20 if held_keys['space'] else 200
+				self.air_time += time.dt
+				self.y -= (self.gravity*(self.air_time+0.5))**(2)*time.dt*mult
 
-				terrain_height = self.game.terrain_generator.get_heightmap(self.position[0]/self.game.map_scale,self.position[2]/self.game.map_scale)*self.game.terrain_y_scale
+				terrain_height = self.game.current_world.terrain_generator.get_heightmap(self.position[0]/ms,self.position[2]/ms)*self.game.current_world.y_scale
 
 				if terrain_height > self.position.y:
 					self.position = (self.position[0], terrain_height, self.position[2])

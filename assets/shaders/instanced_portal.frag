@@ -12,16 +12,6 @@ license: |
     THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.  
 */
 
-#version 140
-in vec2 texcoords;
-in vec4 draw_color;
-in vec4 world_pos;
-out vec4 fragColor;
-uniform float shadertime;
-uniform float fog_max;
-uniform vec4 fog_color;
-uniform vec3 player_position;
-
 vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
 vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
 
@@ -94,8 +84,7 @@ float snoise(vec3 v){
 // Mix final noise value
 	vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
 	m = m * m;
-	return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), 
-																dot(p2,x2), dot(p3,x3) ) );
+	return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
 
 void main() {
@@ -103,21 +92,14 @@ void main() {
 	float x = (texcoords.x - 0.5);
 	float y = (texcoords.y - 0.5);
 	float len = sqrt(x*x + y*y);
-	vec3 out_color = draw_color.xyz * vec3((sin(len*3.14*20-8*shadertime)+1)/2)*sin(asin(sin(len+shadertime)));
-	//vec3 out_color = vec3(snoise((texcoords.xy+vec2(0.1*shadertime, -0.3*shadertime))*15.));
-	vec3 out_color_2 = (vec3(snoise(vec3(texcoords.xy/0.01, shadertime)))+1)/2.;
-
-	//fragColor = vec4(out_color, 1.);
-	fragColor = mix(
-					vec4(
-						mix(
-							mix(out_color, vec3(rand(texcoords.xy*shadertime)), 0.3),
-							out_color_2, 0.3
-							),
-							1.
-						),
-					fog_color,
-					fog_mult
-					).rgba;
+	fragColor = texture(p3d_Texture0, texcoords);
+	fragColor = fragColor * vec4(vec3(sin(len*3.14*20-16*shadertime)+1)/2, 1)*sin(asin(sin(len+shadertime)));
+	vec4 out_color_2 = vec4((vec3(snoise(vec3(texcoords.xy/0.01, shadertime)))+1)/2.,1.);
+	vec4 fade_color = vec4(fog_color.rgb, 0);
+	vec3 noise_color = vec3(rand(texcoords.xy*shadertime));
+	vec3 col = mix(fragColor, noise_color, 0.3);
+	col = mix(col,out_color_2, 0.3);
+	fragColor = vec4(col,1.);
+	fragColor = mix(fragColor,fade_color,(2*len)*(2*len));
+	fragColor = mix(fragColor,fog_color,fog_mult);
 }
-

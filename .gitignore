@@ -1,11 +1,4 @@
 *settings.json
 *.pyc
-rain/__pycache__/__init__.cpython-310.pyc
-rain/__pycache__/audio_handler.cpython-310.pyc
-rain/__pycache__/entities.cpython-310.pyc
-rain/__pycache__/inventory.cpython-310.pyc
-rain/__pycache__/mesh_walker.cpython-310.pyc
-rain/__pycache__/minimap.cpython-310.pyc
-rain/__pycache__/settings.cpython-310.pyc
-rain/__pycache__/sky.cpython-310.pyc
-rain/__pycache__/terrain_generation.cpython-310.pyc
+*/__pycache__/*
+generated/*
