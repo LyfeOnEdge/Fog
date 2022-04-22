@@ -86,7 +86,7 @@ class MeshWalker(Entity):
 		self.last_selected_item = None
 		self.health_bar = HealthBar(bar_color=color.gray, roundness=.5, value=100)
 		self.health_bar.position = (-0.5*self.health_bar.scale.x, .45)
-
+		self.no_clip = False
 		self.key_symbol = Entity(model='assets/models/key', parent=camera.ui, position=(-0.45*camera.aspect_ratio,.45), texture="assets/textures/key_texture_menu.png", rotation=(0,90,0), color=color.white, z=-1)
 		self.key_symbol.scale=0.03
 
@@ -112,6 +112,7 @@ class MeshWalker(Entity):
 			'e' : self.toggle_inventory,
 			'y': self.game.transition_worlds,
 			'o': self.game.toggle_screen_border,
+			'p': self.toggle_no_clip,
 		}
 
 		self.keys_awaiting_release = []
@@ -156,6 +157,19 @@ class MeshWalker(Entity):
 	def update(self): #Override to work with heightmap function instead
 		self.input_task()
 			
+		if self.no_clip:
+			self.rotation_y += mouse.velocity[0] * self.mouse_sensitivity[1]
+			self.rotation_x -= mouse.velocity[1] * self.mouse_sensitivity[0]
+			self.rotation_x = clamp(self.rotation_x, -90, 90)
+
+			self.direction = Vec3(
+				self.forward * (held_keys['w'] - held_keys['s'])
+				+ self.right * (held_keys['d'] - held_keys['a'])
+				+ self.up * (held_keys['space'] - held_keys['left control'])
+				).normalized()
+			self.position += self.direction * self.speed * time.dt * 10
+			return
+
 		if self.movement_enabled:
 			cur_time = time.time()
 			rot = math.sin(cur_time*1.7)
@@ -228,7 +242,6 @@ class MeshWalker(Entity):
 		if mouse.hovered_entity and hasattr(mouse.hovered_entity, 'hp'):
 			mouse.hovered_entity.hp -= 10
 			mouse.hovered_entity.blink(color.red)
-		if mouse.hovered_entity: print(mouse.hovered_entity)
 
 	@property
 	def keys(self):
@@ -324,3 +337,14 @@ class MeshWalker(Entity):
 			self.held_item.visible = False
 			self.held_item.gem.visible = False
 			self.held_item.bolt.visible = False
+
+	def toggle_no_clip(self):
+		if self.no_clip:
+			self.camera_pivot.rotation_x = self.rotation_x
+			self.rotation_x = 0
+		else:
+			self.rotation_x = self.camera_pivot.rotation_x
+			self.rotation_x = 0
+		self.no_clip = not self.no_clip
+
+		

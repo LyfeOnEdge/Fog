@@ -22,8 +22,15 @@ SNOW_VERT_HEAD = '''//SNOW HEAD
 uniform vec3 fallscale_multipliers[250];
 uniform float snow_height;
 '''
+CHUNK_VERT_HEAD = '''//CHUNK VERT HEAD
+uniform samplerBuffer vdata;
+'''
 TIMED_VERT_HEAD = '''//TIMED VERT HEAD
 uniform float shadertime;
+'''
+P3D_NORMAL_VERT_HEAD = '''//P3D VERT HEADER FOR NORMALS CALCULATIONS
+in vec3 p3d_Normal;
+out vec3 normal;
 '''
 STANDARD_VERT_BODY = '''//STANDARD VERT BODY
 texcoords = (p3d_MultiTexCoord0 * texture_scale) + texture_offset;
@@ -46,6 +53,19 @@ float y_displacement = fallscale_multipliers[gl_InstanceID].y*shadertime*0.1;
 int false_mod = int(y_displacement) / int(snow_height) + 1;
 v.y -= y_displacement - (false_mod * snow_height);
 '''
+NOISE_AFFECTED_VERT_BODY = '''
+gl_Position = gl_Position + vec4(0,{}*snoise(vec3(world_pos.x/{},shadertime/4.25,world_pos.z/{})),0,0);
+'''
+
+# gl_Position = gl_Position + vec4((({}*snoise(vec3(world_pos.x/{}.,shadertime/4.25,world_pos.z/{}.))+1)/2)*normalize(normal),0);
+NOISE_AFFECTED_VERT_BODY_NORMAL = '''
+vec4 v = vec4(p3d_Vertex.xyz + normal * ({}*snoise(vec3(world_pos.x/{},shadertime/4.25,world_pos.z/{}))), 1);
+gl_Position = p3d_ModelViewProjectionMatrix * v;
+'''
+
+P3D_NORMAL_VERT_BODY = '''//P3D BODY FOR NORMALS CALCULATIONS
+normal = p3d_Normal;
+'''
 STANDARD_FRAG_HEAD = '''//STANDARD FRAG HEAD
 in vec4 world_pos;
 in vec2 texcoords;
@@ -60,7 +80,15 @@ fragColor = texture(p3d_Texture0, texcoords) * p3d_ColorScale;
 TIMED_FRAG_HEAD = '''//TIMED FRAG HEAD
 uniform float shadertime;
 '''
-PORTAL_FRAG_HEAD = """//START PORTAL FRAG HEAD
+P3D_NORMAL_FRAG_HEAD = '''//P3D HEADER FOR NORMALS CALCULATIONS
+in vec3 normal;
+'''
+CEL_SHADED_FRAG_HEAD = '''//CELL SHADED FRAG HEAD
+uniform vec3 light_angle;
+uniform float levels;
+uniform float min_cel_intensity;
+'''
+NOISE_FRAG_HEAD = """//START PORTAL FRAG HEAD
 /*
 author: [Ian McEwan, Ashima Arts]
 description: Simplex Noise https://github.com/ashima/webgl-noise
@@ -163,6 +191,12 @@ fragColor = mix(fragColor, noise_color, 0.3);
 vec4 fade_color = vec4(fog_color.rgb, 0);
 fragColor = mix(fragColor,fade_color,(2*len)*(2*len));
 """
+CLOUD_FRAG_BODY = """//CLOUD FRAG BODY
+float x = (texcoords.x - 0.5);
+float y = (texcoords.y - 0.5);
+float scaled_time = 0.6 * shadertime;
+fragColor = mix(fragColor, vec4(.8,.8,1,1), (sin(3.14 * snoise(vec3(texcoords.x*3+scaled_time, texcoords.y*3-scaled_time, scaled_time*1.2))+0.4)/2.));
+"""
 CHUNK_FRAG_HEAD = '''//CHUNK FRAG HEAD
 uniform float terrain_y_scale;
 uniform float map_scale;
@@ -180,15 +214,19 @@ FOG_FRAG_BODY = '''//FOG FRAG BODY
 float fog_mult = min(1,length(player_position-world_pos.xyz)/fog_max);
 fragColor = mix(fragColor,fog_color,fog_mult);
 '''
+CEL_SHADED_FRAG_BODY = '''//CELL SHADED FRAG BODY
+float intensity = dot(light_angle,normalize(normal));
+intensity = floor(intensity*levels)/(levels);
+intensity *= 1. - min_cel_intensity;
+intensity += min_cel_intensity;
+fragColor *= vec4(vec3(max(intensity, min_cel_intensity)), 1);
+'''
 END_SECTION = '}'
 
 def save_generated_shaders(name, vert, frag):
-	if not os.path.isdir('generated/shaders'):
-		os.makedirs('generated/shaders')
-	with open(os.path.join('generated/shaders', f'{name}.vert'), 'w+') as v:
-		v.write(vert)
-	with open(os.path.join('generated/shaders', f'{name}.frag'), 'w+') as f:
-		f.write(frag)
+	if not os.path.isdir('generated/shaders'):	os.makedirs('generated/shaders')
+	with open(os.path.join('generated/shaders', f'{name}.vert'), 'w+') as v: v.write(vert)
+	with open(os.path.join('generated/shaders', f'{name}.frag'), 'w+') as f: f.write(frag)
 
 def generate_snow_shader(world):
 	vert = VERSION
@@ -205,11 +243,12 @@ def generate_snow_shader(world):
 	frag += STANDARD_FRAG_BODY
 	frag += FOG_FRAG_BODY
 	frag += END_SECTION
+	fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
 	defaults = {
 		'texture_scale' : Vec2(1,1),
 		'texture_offset' : Vec2(0.0, 0.0),
 		'fog_color': world.fog_color,
-		'fog_max': world.map_scale*(world.radius-0.5),
+		'fog_max': world.fog_density[1],
 		'position_offsets' : [Vec3(0.0)],
 		'rotation_offsets' : [Vec4(0.0)],
 		'scale_multipliers' : [Vec3(1)],
@@ -227,26 +266,35 @@ def generate_snow_shader(world):
 
 def generate_foliage_shader(world):
 	vert = VERSION
+	vert += P3D_NORMAL_VERT_HEAD
 	vert += INSTANCING_VERT_HEAD
 	vert += STANDARD_VERT_HEAD
 	vert += STANDARD_VERT_BODY
 	vert += STANDARD_VERT_BODY_INSTANCED
+	vert += P3D_NORMAL_VERT_BODY
 	vert += END_SECTION
 	frag = VERSION
+	frag += P3D_NORMAL_FRAG_HEAD
+	frag += CEL_SHADED_FRAG_HEAD
 	frag += FOG_FRAG_HEAD
 	frag += STANDARD_FRAG_HEAD
 	frag += STANDARD_FRAG_BODY
+	frag += CEL_SHADED_FRAG_BODY
 	frag += FOG_FRAG_BODY
 	frag += END_SECTION
+	fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
 	defaults = {
 		'texture_scale' : Vec2(1,1),
 		'texture_offset' : Vec2(0.0, 0.0),
 		'fog_color': world.fog_color,
-		'fog_max': world.map_scale*(world.radius-0.5),
+		'fog_max': fog_max,
 		'terrain_y_scale': world.terrain_y_scale,
 		'position_offsets' : [Vec3(0.0)],
 		'rotation_offsets' : [Vec4(0.0)],
 		'scale_multipliers' : [Vec3(1)],
+		'light_angle' : Vec3(1,0.75,1),
+		'levels': 4.,
+		'min_cel_intensity' : world.ambient_light_level
 	}
 	shader = Shader(language=Shader.GLSL,
 		vertex=vert,
@@ -256,27 +304,42 @@ def generate_foliage_shader(world):
 	save_generated_shaders('foliage', vert, frag)
 	return shader
 
+
 def generate_chunk_shader(world):
 	vert = VERSION
+	vert += P3D_NORMAL_VERT_HEAD
+	vert += CHUNK_VERT_HEAD
+	if world.ground_breathes: vert += TIMED_VERT_HEAD
+	vert += NOISE_FRAG_HEAD
 	vert += STANDARD_VERT_HEAD
 	vert += STANDARD_VERT_BODY
 	vert += STANDARD_VERT_BODY_NON_INSTANCED
+	vert += P3D_NORMAL_VERT_BODY
+	if world.ground_breathes: vert += NOISE_AFFECTED_VERT_BODY(14, 20)
 	vert += END_SECTION
 	frag = VERSION
+	frag += P3D_NORMAL_FRAG_HEAD
+	frag += CEL_SHADED_FRAG_HEAD
 	frag += CHUNK_FRAG_HEAD
 	frag += FOG_FRAG_HEAD
 	frag += STANDARD_FRAG_HEAD
 	frag += STANDARD_FRAG_BODY
-	frag += CHUNK_FRAG_BODY
+	# frag += CHUNK_FRAG_BODY
+	frag += CEL_SHADED_FRAG_BODY
 	frag += FOG_FRAG_BODY
 	frag += END_SECTION
+	fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
 	defaults = {
-		'texture_scale' : Vec2(1,1),
+		'texture_scale' : Vec2(4,4),
 		'texture_offset' : Vec2(0.0, 0.0),
 		'fog_color': world.fog_color,
-		'fog_max': world.map_scale*(world.radius-0.5),
+		'fog_max': fog_max,
 		'map_scale': world.map_scale,
-		'terrain_y_scale': world.terrain_y_scale
+		'terrain_y_scale': world.terrain_y_scale,
+		'light_angle' : Vec3(1,0.75,0),
+		'levels': 4.,
+		'min_cel_intensity' : world.ambient_light_level,
+		'shadertime' : 0,
 	}
 	shader = Shader(language=Shader.GLSL,
 		vertex=vert,
@@ -295,18 +358,19 @@ def generate_portal_shader(world):
 	vert += END_SECTION
 	frag = VERSION
 	frag += TIMED_FRAG_HEAD
-	frag += PORTAL_FRAG_HEAD
+	frag += NOISE_FRAG_HEAD
 	frag += FOG_FRAG_HEAD
 	frag += STANDARD_FRAG_HEAD
 	frag += STANDARD_FRAG_BODY
 	frag += PORTAL_FRAG_BODY
 	frag += FOG_FRAG_BODY
 	frag += END_SECTION
+	fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
 	defaults = {
 		'texture_scale' : Vec2(1,1),
 		'texture_offset' : Vec2(0.0, 0.0),
 		'fog_color': world.fog_color,
-		'fog_max': world.map_scale*(world.radius-0.5),
+		'fog_max': fog_max,
 		'position_offsets' : [Vec3(0.0)],
 		'rotation_offsets' : [Vec4(0.0)],
 		'scale_multipliers' : [Vec3(1)],
@@ -319,3 +383,117 @@ def generate_portal_shader(world):
 	)
 	save_generated_shaders('portal', vert, frag)
 	return shader
+
+def generate_cloud_shader(world):
+	vert = VERSION
+	vert += STANDARD_VERT_HEAD
+	vert += STANDARD_VERT_BODY
+	vert += STANDARD_VERT_BODY_NON_INSTANCED
+	vert += END_SECTION
+	frag = VERSION
+	frag += TIMED_FRAG_HEAD
+	frag += NOISE_FRAG_HEAD
+	# frag += FOG_FRAG_HEAD
+	frag += STANDARD_FRAG_HEAD
+	frag += STANDARD_FRAG_BODY
+	frag += CLOUD_FRAG_BODY
+	# frag += FOG_FRAG_BODY
+	frag += END_SECTION
+	# fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
+	defaults = {
+		'texture_scale' : Vec2(1,1),
+		'texture_offset' : Vec2(0.0, 0.0),
+		# 'fog_color': world.fog_color,
+		# 'fog_max': fog_max,
+		# 'map_scale': world.map_scale,
+		# 'terrain_y_scale': world.terrain_y_scale
+		'shadertime' :0,
+	}
+	shader = Shader(language=Shader.GLSL,
+		vertex=vert,
+		fragment=frag,
+		default_input=defaults,
+	)
+	save_generated_shaders('cloud', vert, frag)
+	return shader
+
+def generate_cell_shader(world): #Raw test shader, not really used
+	vert = VERSION
+	vert += P3D_NORMAL_VERT_HEAD
+	vert += STANDARD_VERT_HEAD
+	vert += STANDARD_VERT_BODY
+	vert += STANDARD_VERT_BODY_NON_INSTANCED
+	vert += P3D_NORMAL_VERT_BODY
+	vert += END_SECTION
+	frag = VERSION
+	frag += TIMED_FRAG_HEAD
+	frag += P3D_NORMAL_FRAG_HEAD
+	frag += CEL_SHADED_FRAG_HEAD
+	frag += STANDARD_FRAG_HEAD
+	frag += STANDARD_FRAG_BODY
+	frag += CEL_SHADED_FRAG_BODY
+	frag += END_SECTION
+	defaults = {
+		'texture_scale' : Vec2(1.),
+		'texture_offset' : Vec2(0.),
+		'light_angle' : Vec3(1,0.75,0),
+		'levels': 4.,
+		'min_cel_intensity' : world.ambient_light_level
+		# 'fog_color': world.fog_color,
+		# 'fog_max': fog_max,
+		# 'map_scale': world.map_scale,
+		# 'terrain_y_scale': world.terrain_y_scale
+	}
+	shader = Shader(language=Shader.GLSL,
+		vertex=vert,
+		fragment=frag,
+		default_input=defaults,
+	)
+	save_generated_shaders('cell', vert, frag)
+	return shader
+
+def generate_deformation_shader(world=None, scale=1, model_scale=1):
+	vert = VERSION
+	vert += P3D_NORMAL_VERT_HEAD
+	vert += CHUNK_VERT_HEAD
+	vert += TIMED_VERT_HEAD
+	vert += NOISE_FRAG_HEAD
+	vert += STANDARD_VERT_HEAD
+	vert += STANDARD_VERT_BODY
+	vert += STANDARD_VERT_BODY_NON_INSTANCED
+	vert += P3D_NORMAL_VERT_BODY
+	
+	vert += NOISE_AFFECTED_VERT_BODY_NORMAL.format(scale, model_scale, model_scale)
+
+	vert += END_SECTION
+	frag = VERSION
+	frag += P3D_NORMAL_FRAG_HEAD
+	frag += CEL_SHADED_FRAG_HEAD
+	frag += CHUNK_FRAG_HEAD
+	# frag += FOG_FRAG_HEAD
+	frag += STANDARD_FRAG_HEAD
+	frag += STANDARD_FRAG_BODY
+	# frag += CHUNK_FRAG_BODY
+	frag += CEL_SHADED_FRAG_BODY
+	# frag += FOG_FRAG_BODY
+	frag += END_SECTION
+	fog_max = world.fog_density[1] if world.fog_density[1] > 0 else 99999999
+	defaults = {
+		'texture_scale' : Vec2(4,4),
+		'texture_offset' : Vec2(0.0, 0.0),
+		'fog_color': world.fog_color,
+		'fog_max': fog_max,
+		'map_scale': world.map_scale,
+		'terrain_y_scale': world.terrain_y_scale,
+		'light_angle' : Vec3(1,0.75,0),
+		'levels': 4.,
+		'min_cel_intensity' : world.ambient_light_level,
+		'shadertime' : 0,
+	}
+	shader = Shader(language=Shader.GLSL,
+		vertex=vert,
+		fragment=frag,
+		default_input=defaults,
+	)
+	save_generated_shaders(f'deformation_S{scale}_MS{model_scale}', vert, frag)
+	return shader	

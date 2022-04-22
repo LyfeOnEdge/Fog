@@ -23,9 +23,9 @@ class snow_entity:
 DELAY = 1.0/60.0
 
 class SnowCloud(Entity):
-	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), shader=None, **kwargs):
+	def __init__(self, *args, game = None, thickness=8, gravity=1, particle_color=color.rgba(180,180,180,100), **kwargs):
 		if hasattr(game, 'entity_manager'):
-			model = game.entity_manager.get_snow_model()
+			model = game.entity_manager.get_model('snow')
 		else:
 			points = np.array([Vec3(random.uniform(-10,10),random.uniform(-5,0),random.uniform(-10,10)) for i in range(2000)])
 			model = deepcopy(Mesh(vertices=points, mode='point', thickness=thickness, render_points_in_3d=True))
@@ -35,7 +35,7 @@ class SnowCloud(Entity):
 		self.setRenderModePerspective(True)
 		self.instances = []
 		self.model.uvs = [(v[0],v[1]) for v in self.model.vertices]
-		self.shader = shader
+		self.shader = generate_snow_shader(self.game.current_world)
 		self.setInstanceCount(250)
  
 		self.positions = []
@@ -71,6 +71,12 @@ class SnowCloud(Entity):
 			self.set_shader_input('player_position', self.game.player.position)
 			self.set_shader_input('shadertime', t - self.start)
 			self.last_update = t
+
+	def set_fog_distance(self, dist):
+		self.set_shader_input('fog_max', dist)
+
+	def set_fog_color(self, col):
+		self.set_shader_input('fog_color', col)
 
 
 class dummy_player(Entity):

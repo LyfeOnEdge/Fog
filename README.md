@@ -1,39 +1,38 @@
 ## README.md
 
-<<<<<<< HEAD
-### TODO:
-Seed deterministic spawns
-reimplement save system
-add sword and bow
-add inventory
-=======
 TODO:
+
+make snow follow player and fade out when not needed
 
 Seed deterministic foliage / chest spawns
 
->>>>>>> 17c73ffd339185a65f0a9db99f034f8539271557
 add portal system
-
-reimplement moon
 
 heart restores more health as time goes
 
-more enemies
+progen skyboxes w/ mountains etc
+
+acheivements system
+
+tree colliders
 
 
-<<<<<<< HEAD
+more enemies:
+- Slime mimic
+
 ### CREDITS:
+
+Many of the custom shaders are modified versions of the buit in Ursina and Panda3D shaders
+
+https://github.com/ashima/webgl-noise/blob/master/src/noise3D.glsl [MIT] - Noise shader uses code taken from here see
+
 Audio by atriumthewriter: https://github.com/atriumthewriter/music-i-have-done
 
-Many of the custom shaders are modified versions of the default ursina shaders
-
-https://github.com/ashima/webgl-noise/blob/master/src/noise3D.glsl [MIT] - Used in the 
 
 
 
-### SPECIAL THANKS:
+### Resources Used:
 
-=======
-CREDITS:
-Audio by atriumthewriter: https://github.com/atriumthewriter/music-i-have-done
->>>>>>> 17c73ffd339185a65f0a9db99f034f8539271557
+Ursina Cheat Sheet: https://www.ursinaengine.org/cheat_sheet_dark.html
+
+Fast Loading Techniques: https://docs.panda3d.org/1.10/python/programming/advanced-loading/async

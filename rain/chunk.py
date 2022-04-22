@@ -1,13 +1,9 @@
 from ursina import *
-
+from ursina.scripts.generate_normals import normalize_v3
 import numpy as np
-import numba
 
-from panda3d.core import NodePath
-from panda3d.core import GeomVertexData, GeomVertexFormat, Geom, GeomNode
-from panda3d.core import GeomTriangles, GeomTristrips, GeomTrifans
-from panda3d.core import GeomLines, TextureStage, TexGenAttrib, GeomVertexWriter, GeomVertexArrayFormat
-
+from panda3d.core import NodePath, SamplerState, Geom, GeomNode, GeomTriangles
+from panda3d.core import GeomVertexData, GeomVertexFormat, GeomVertexArrayFormat
 from opensimplex import OpenSimplex
 
 if __name__ == '__main__':
@@ -15,7 +11,18 @@ if __name__ == '__main__':
 else:
 	from .settings import settings
 
-window.borderless = False
+#Optimized version of the function from Ursina's generate normals script
+def generate_normals(vertices, triangles, norm_scale=1):
+	vertices[:,1]*=norm_scale #Adjust the input verticies y scale 
+	normals = np.zeros(vertices.shape, dtype=vertices.dtype)
+	tris = vertices[triangles]
+	n = np.cross(tris[::,1] - tris[::,0] ,tris[::,2] - tris[::,0])
+	normalize_v3(n)
+	normals[triangles[:,0]] -= n
+	normals[triangles[:,1]] -= n
+	normals[triangles[:,2]] -= n
+	normalize_v3(normals)
+	return normals
 
 class Chunk(Entity):
 	grid_size = settings.chunk_divisions
@@ -35,30 +42,43 @@ class Chunk(Entity):
 		tris = tris.astype(np.uint16)
 	tris = tris.reshape((grid_size, grid_size, 6))
 	
-	# This can be done faster with numpy and/or numba, etc.
+	normal_tris = []
+	shp = positions.shape[1]
 	for row in range(grid_size):
 		for col in range(grid_size):
-			i = col + row * positions.shape[1]
+			i = col + row * shp
 			tris[row, col, 0] = i
 			tris[row, col, 1] = i + 1
-			tris[row, col, 2] = i + positions.shape[1]
-			tris[row, col, 3] = i + positions.shape[1]
+			tris[row, col, 2] = i + shp
+			tris[row, col, 3] = i + shp
 			tris[row, col, 4] = i + 1
-			tris[row, col, 5] = i + 1 + positions.shape[1]
+			tris[row, col, 5] = i + 1 + shp
+			normal_tris.extend([(i, i+1, i+shp), (i+shp,i+1,i+1+shp)])
+	normal_tris = np.asarray(normal_tris)
 	tris = tris.ravel()
+
+	len_triangles = len(tris)
+	prim = GeomTriangles(Geom.UHStatic)
+	prim.reserve_num_vertices(len_triangles)
+	prim_array = prim.modify_vertices()
+	prim_array.unclean_set_num_rows(len_triangles)
 
 	def __init__(self, world, chunk_id, shader):
 		self.world, self.chunk_id = world, chunk_id
 		x,z = chunk_id
-		heights = world.terrain_generator.get_chunk_heightmap(self.xs.ravel()+x,self.zs.ravel()+z)
+		self.heightmap = heights = world.terrain_generator.get_chunk_heightmap(self.xs.ravel()+x,self.zs.ravel()+z)
 		positions = self.positions.copy()
-		# positions[:, :, 0] += x
-		positions[:, :, 1] = heights * world.terrain_y_scale
-		# positions[:, :, 2] += z
-		self.heightmap = heights
+		positions[:, :, 1] = heights
+		normals = generate_normals(positions.copy().reshape((self.grid_size + 1) * (self.grid_size + 1), 3), self.normal_tris, norm_scale=3)
+		positions[:, :, 1] *= world.terrain_y_scale #Apply world deformation scale
 		
-		mesh = FastMesh(vertices=positions.ravel(), triangles=self.tris.copy(), uvs=self.uvs.copy())
-		Entity.__init__(self, model=mesh, shader=shader, color=world.color, scale = world.map_scale, position=(x*self.world.map_scale,0,z*self.world.map_scale))
+		mesh = FastMesh(self.prim, self.prim_array, positions.ravel(), self.tris, self.uvs, np.asarray(normals, dtype=np.float32).ravel())
+		# tex = loader.loadTexture('assets/textures/grass_light.png')
+		# tex.setMagfilter(SamplerState.FT_nearest_mipmap_linear)
+		# tex.setMinfilter(SamplerState.FT_nearest_mipmap_linear)
+		# tex.setAnisotropicDegree(2)
+		# mesh.setTexture(tex)
+		Entity.__init__(self, model=mesh, shader=shader, color=world.color, scale = world.map_scale, position=(x*self.world.map_scale,0,z*self.world.map_scale), texture_scale=(14,14))
 		self.set_shader_input('player_position', (0,0,0))
 		self.set_shader_input('terrain_y_scale', world.terrain_y_scale)
 		self.chunk_entities = []
@@ -66,66 +86,50 @@ class Chunk(Entity):
 		self.portals = []
 
 class FastMesh(NodePath):
-	def __init__(self, vertices=None, triangles=None, colors=None, uvs=None, normals=None, static=True, mode='triangle', thickness=1, render_points_in_3d=True):
+	v_array = GeomVertexArrayFormat()
+	v_array.addColumn("vertex", 3, Geom.NTFloat32, Geom.CPoint)
+	t_array = GeomVertexArrayFormat()
+	t_array.addColumn("texcoord", 2, Geom.NTFloat32, Geom.CTexcoord)
+	n_array = GeomVertexArrayFormat()
+	n_array.addColumn("normal", 3, Geom.NTFloat32, Geom.CPoint)
+	vertex_format = GeomVertexFormat()
+	vertex_format.addArray(v_array)
+	vertex_format.addArray(t_array)
+	vertex_format.addArray(n_array)
+	vertex_format = GeomVertexFormat.registerFormat(vertex_format)
+	def __init__(self, prim, prim_array, vertices, triangles, uvs, normals):
 		super().__init__('mesh')
 		self.name = 'mesh'
 		self.vertices = vertices
 		self.triangles = triangles
-		self.colors = colors
 		self.uvs = uvs
 		self.normals = normals
-		self.static = static
-		self.mode = mode
-		self.thickness = thickness
-		self.render_points_in_3d = render_points_in_3d
+		self.prim, self.prim_array = prim, prim_array
+		self.generate()
  
-		if self.vertices is not None:
-			self.generate()
-
-		tex = loader.loadTexture('assets/textures/grass.png')
-
-		self.setTexture(tex)
- 
-	def generate(self):  # call this after setting some of the variables to update it
-		if hasattr(self, 'geomNode'):
-			self.geomNode.removeAllGeoms()
-
-		v_array = GeomVertexArrayFormat()
-		v_array.addColumn("vertex", 3, Geom.NTFloat32, Geom.CPoint)
-		t_array = GeomVertexArrayFormat()
-		t_array.addColumn("texcoord", 2, Geom.NTFloat32, Geom.CTexcoord)
-		vertex_format = GeomVertexFormat()
-		vertex_format.addArray(v_array)
-		vertex_format.addArray(t_array)
-		vertex_format = GeomVertexFormat.registerFormat(vertex_format)
-		self.vdata = GeomVertexData('name', vertex_format, Geom.UHStatic)
+	def generate(self):
+		self.vdata = GeomVertexData('name', self.vertex_format, Geom.UHStatic)
 		self.vdata.setNumRows(len(self.vertices))
 
-		arrayHandle0: core.GeomVertexArrayData = self.vdata.modifyArray(0)
-		prim = GeomTriangles(Geom.UHStatic)
-		 
-		pos_array = self.vdata.modifyArray(0)
-		memview = memoryview(pos_array).cast("B").cast("f")
+		#Write Verts
+		memview = memoryview(self.vdata.modifyArray(0)).cast("B").cast("f")
 		memview[:len(self.vertices)] = self.vertices
-
-		tex_array = self.vdata.modifyArray(1)
-		memview = memoryview(tex_array).cast("B").cast("f")
+		#Write UVs
+		memview = memoryview(self.vdata.modifyArray(1)).cast("B").cast("f")
 		memview[:len(self.uvs)] = self.uvs
+		#Write Normals
+		memview = memoryview(self.vdata.modifyArray(2)).cast("B").cast("f")
+		memview[:len(self.normals)] = self.normals
 
-		if not hasattr(self, 'geomNode'):
-			self.geomNode = GeomNode('mesh')
-			self.attachNewNode(self.geomNode)
+		self.geomNode = GeomNode('mesh')
+		self.attachNewNode(self.geomNode)
 
-		prim.reserve_num_vertices(len(self.triangles))
-		prim_array = prim.modify_vertices()
-		prim_array.unclean_set_num_rows(len(self.triangles))
-		memview = memoryview(prim_array)
+		memview = memoryview(self.prim_array)
 		memview[:] = self.triangles
 
 		geom = Geom(self.vdata)
-		geom.addPrimitive(prim)
+		geom.addPrimitive(self.prim)
 		self.geomNode.addGeom(geom)
-
 
 if __name__ == "__main__":
 	from terrain_generation import TerrainGenerator

@@ -8,8 +8,8 @@ else:
 	from .settings import settings
 
 class PortalSpawner(Entity):
-	def __init__(self, world, model, shader, *args, **kwargs):
-		Entity.__init__(self, *args, model=model, texture="assets/textures/tree_texture", **kwargs)
+	def __init__(self, world, shader, *args, **kwargs):
+		Entity.__init__(self, *args, model=world.game.entity_manager.get_model('portal'), texture="assets/textures/tree_texture", **kwargs)
 		self.world = world
 		self.instances = []
 		self._uid = 0
@@ -34,7 +34,7 @@ class PortalSpawner(Entity):
 		self.setInstanceCount(len(self.positions))
 		self.scales.append(scale)
 		q = LQuaterniond()
-		q.setHpr(LVecBase3d(rotation.x,rotation.y,180+rotation.z))
+		q.setHpr(LVecBase3d(rotation.x,rotation.y,rotation.z+180))
 		self.quaternions.append(q)
 		self.instances.append(uid)
 		self.update_shader()
@@ -71,7 +71,8 @@ class FoliageIdentifier:
 
 class FoliageSpawner(Entity):
 	def __init__(self, world, typeindex, spawnerindex, model, shader, *args, **kwargs):
-		Entity.__init__(self, *args, model=model, texture="assets/textures/tree_texture", **kwargs)
+		# texture="assets/textures/tree_texture",
+		Entity.__init__(self, *args, model=model, **kwargs)
 		self.world = world
 		self.typeindex, self.spawnerindex = typeindex, spawnerindex
 		self.instances = []
@@ -96,7 +97,7 @@ class FoliageSpawner(Entity):
 		self.setInstanceCount(len(self.positions))
 		self.scales.append(scale)
 		q = LQuaterniond()
-		q.setHpr(LVecBase3d(rotation.x,rotation.y,180+rotation.z))
+		q.setHpr(LVecBase3d(rotation.x,rotation.y,rotation.z+180))
 		self.quaternions.append(q)
 		self.instances.append(uid)
 		self.update_shader()
@@ -122,16 +123,22 @@ class FoliageSpawner(Entity):
 
 class FoliageManager:
 	def __init__(self, world):
+		self.game = world.game
 		self.world = world
 		self.tree_spawners = []
 		self.big_tree_spawners = []
 		self.mushroom_spawners = []
-		portal_shader = generate_portal_shader(self.world)
-		self.portal_spawner = PortalSpawner(self.world, load_model('assets/models/portal2'), portal_shader)
-		foliage_shader = generate_foliage_shader(self.world)
-		for i in range(31): self.tree_spawners.append(FoliageSpawner(self.world, 0, i, load_model(f"assets/models/tree{i}"), foliage_shader))
-		for i in range(23): self.big_tree_spawners.append(FoliageSpawner(self.world, 1, i, load_model(f"assets/models/big_tree{i}"), foliage_shader))
-		for i in range(6): self.mushroom_spawners.append(FoliageSpawner(self.world, 2, i, load_model(f"assets/models/smallmushroom{i}"), foliage_shader))
+		portal_shader = generate_portal_shader(world)
+		self.portal_spawner = PortalSpawner(world, portal_shader)
+		foliage_shader = generate_foliage_shader(world)
+
+		for i in range(settings.number_tree_models):
+			self.tree_spawners.append(FoliageSpawner(world, 0, i, world.game.entity_manager.get_model(f"assets/models/tree{i}"), foliage_shader, color=world.foliage_color))
+		for i in range(settings.number_big_tree_models):
+			self.big_tree_spawners.append(FoliageSpawner(world, 1, i, world.game.entity_manager.get_model(f"assets/models/big_tree{i}"), foliage_shader, color=world.foliage_color))
+		for i in range(settings.number_mushroom_models):
+			self.mushroom_spawners.append(FoliageSpawner(world, 2, i, world.game.entity_manager.get_model(f"assets/models/smallmushroom{i}"), foliage_shader, color=world.foliage_color))
+
 		self.spawners = [self.tree_spawners, self.big_tree_spawners, self.mushroom_spawners]
 		self.tick = 0
 
@@ -151,32 +158,30 @@ class FoliageManager:
 		self.spawners[id.tind][id.sind].remove_entity(id.uid)
 
 	def set_fog_distance(self, dist):
-		self.fog_max = dist
 		for s in self.tree_spawners: s.set_shader_input('fog_max', dist)
 		for s in self.big_tree_spawners: s.set_shader_input('fog_max', dist)
 		for s in self.mushroom_spawners: s.set_shader_input('fog_max', dist)
+		self.portal_spawner.set_shader_input('fog_max', dist)
+
+	def set_fog_color(self, col):
+		for s in self.tree_spawners: s.set_shader_input('fog_color', col)
+		for s in self.big_tree_spawners: s.set_shader_input('fog_color', col)
+		for s in self.mushroom_spawners: s.set_shader_input('fog_color', col)
+		self.portal_spawner.set_shader_input('fog_color', col)
 
 	def update_shaders(self):
-		if not self.tick % 2:
-			for _s in self.spawners:
-				for s in _s:
-					if s.instances:
-						s.set_shader_input('player_position', self.world.game.player.position)
+		for _s in self.spawners:
+			for s in _s:
+				if s.instances:
+					s.set_shader_input('player_position', self.game.player.position)
+					s.set_shader_input('light_angle', self.world.light_angle)
+		self.portal_spawner.set_shader_input('player_position', self.game.player.position)
+		self.portal_spawner.set_shader_input('light_angle', self.world.light_angle)
 		self.portal_spawner.update_shadertime()
-		self.tick += 1
 
-# if __name__ == '__main__':
-# 	from ursina.prefabs.first_person_controller import FirstPersonController
-# 	from pathlib import Path
-# 	import os
-# 	app = Ursina(vsync=False)
-# 	app.map_scale = 100
-# 	app.player = FirstPersonController(game=app, y=2)
-# 	app.player.cursor.color = color.clear
-# 	# app.player = dummy_player()
-# 	# app.radius = 1
-# 	foliage = FoliageManager(app)
-# 	# camera = EditorCamera()
-# 	ground = Entity(model='plane', texture='grass', scale=2*app.map_scale)
-# 	ground.collider = ground.model
-# 	app.run()
+	def destroy(self):
+		for s in self.spawners:
+			for _s in s:
+				destroy(_s)
+		destroy(self.portal_spawner)
+		del self

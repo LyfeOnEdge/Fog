@@ -2,3 +2,6 @@
 *.pyc
 */__pycache__/*
 generated/*
+assets/models/monkae.mtl
+assets/models/monkae.obj
+*.mtl

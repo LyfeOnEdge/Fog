@@ -3,10 +3,6 @@ import numpy as np
 import numba
 
 @numba.jit(nopython=True)
-def s_arr(arr_1, arr_2, weight):
-	return arr_1 + (arr_2 * weight)
-
-@numba.jit(nopython=True)
 def s_all(arr_1, arr_2, arr_2_w, arr_3, arr_3_w, arr_4, arr_4_w, cw):
 	return (((arr_1 + (arr_2 * arr_2_w) + (arr_3 * arr_3_w) + (arr_4 * arr_4_w)) / cw) + 1.) / 2.
 
@@ -28,7 +24,7 @@ class TerrainGenerator:
 		self.array_generator2 = OpenSimplex(seed=(seed+7)).noise2array
 		self.array_generator3 = OpenSimplex(seed=(seed+13)).noise2array
 		self.array_generator4 = OpenSimplex(seed=(seed+19)).noise2array
-		self.combined_weight = 1+self.world.second_generator_weight+self.world.third_generator_weight+self.world.fourth_generator_weight
+		self.combined_weight = self.world.generator_scale+self.world.second_generator_weight+self.world.third_generator_weight+self.world.fourth_generator_weight
 		self.divisions = self.world.chunk_divisions+1
 	def get_heightmap(self,x,z):
 		height = self.generator(x*self.world.generator_scale,z*self.world.generator_scale)
@@ -38,12 +34,19 @@ class TerrainGenerator:
 		return ((height / self.combined_weight)+1)/2.
 
 	def get_chunk_heightmap(self,x_values,z_values):
-		x1, z1, x2, z2, x3, z3, x4, z4 = scale_all(x_values, z_values, self.world.generator_scale, self.world.second_generator_scale, self.world.third_generator_scale, self.world.fourth_generator_scale)
-		out = self.array_generator(x1,z1).reshape(self.divisions,self.divisions)
-		out2 = self.array_generator2(x2,z2).reshape(self.divisions,self.divisions)
-		out3 = self.array_generator3(x3,z3).reshape(self.divisions,self.divisions)
-		out4 = self.array_generator4(x4,z4).reshape(self.divisions,self.divisions)
-		return s_all(out, out2, self.world.second_generator_weight, out3, self.world.third_generator_weight, out4, self.world.fourth_generator_weight, self.combined_weight)
+		x1, z1, x2, z2, x3, z3, x4, z4 = scale_all(
+			x_values,
+			z_values,
+			self.world.generator_scale,
+			self.world.second_generator_scale,
+			self.world.third_generator_scale,
+			self.world.fourth_generator_scale
+		)
+		out = self.array_generator(x1,z1)
+		out2 = self.array_generator2(x2,z2)
+		out3 = self.array_generator3(x3,z3)
+		out4 = self.array_generator4(x4,z4)
+		return s_all(out, out2, self.world.second_generator_weight, out3, self.world.third_generator_weight, out4, self.world.fourth_generator_weight, self.combined_weight).reshape(self.divisions,self.divisions)
 
 if __name__ == "__main__":
 	class dummy_world:
